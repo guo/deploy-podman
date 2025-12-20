@@ -1,30 +1,70 @@
 # Copy this file to 'targets.config' and fill in your actual values
 # Usage: ./deploy-podman-ssh.sh <target>
 # Example: ./deploy-podman-ssh.sh production
+#
+# Directory Structure:
+#   All container directories must be inside targets/ folder:
+#     targets/${CONTAINER_NAME}/.env              (required - environment variables)
+#     targets/${CONTAINER_NAME}/config.json       (optional - additional files)
+#     targets/${CONTAINER_NAME}/data.txt          (optional - additional files)
+#
+#   Example:
+#     targets/myapp-prod/.env
+#     targets/myapp-prod/config.json
+#
+#   Files are uploaded to remote: /var/app/${CONTAINER_NAME}/
+#   Env file is automatically used with --env-file flag
 
 # Common Configuration (shared across all targets)
+# These serve as defaults and can be overridden per-target
 CONTAINER_IMAGE="ghcr.io/your-org/your-image:latest"
 GHCR_USERNAME="your-github-username"
 # setup classic personal token with package:read permission
 GHCR_TOKEN="ghp_your_github_personal_access_token_here"
 
 # ==============================================
-# Target 1
+# Target 1 - Private Image (uses global credentials)
 # ==============================================
 [prod1]
 SSH_HOST="your-prod-host"
-CONTAINER_NAME="your-container-name"
-CONTAINER_PORT="80"
-ENV_FILE=".env.Target1"
-ENV_FILE_REMOTE_PATH="path-to-env-file"
+CONTAINER_NAME="myapp-prod"
+CONTAINER_PORT="3000"
+HOST_PORT="80"
+# Optional: Override global image/credentials
+# CONTAINER_IMAGE="ghcr.io/your-org/another-image:latest"
+# GHCR_USERNAME="another-user"
+# GHCR_TOKEN="ghp_another_token"
+# Optional: Map additional files to container
+# Format: "local_file:container_path,local_file2:container_path2"
+# Paths are relative to targets/${CONTAINER_NAME}/ directory
+FILE_MAPPINGS="config.json:/app/config.json,data.txt:/app/data/data.txt"
 
 
 # ==============================================
-# Target 2
+# Target 2 - Public Image (no credentials needed)
 # ==============================================
 [staging]
-SSH_HOST="your-prod-host"
-CONTAINER_NAME="your-container-name"
-CONTAINER_PORT="80"
-ENV_FILE=".env.staging"
-ENV_FILE_REMOTE_PATH="path-to-env-file"
+SSH_HOST="your-staging-host"
+CONTAINER_NAME="myapp-staging"
+CONTAINER_PORT="3000"
+HOST_PORT="80"
+# Use a public Docker Hub image (no credentials required)
+CONTAINER_IMAGE="nginx:latest"
+# Leave credentials empty for public images
+GHCR_USERNAME=""
+GHCR_TOKEN=""
+FILE_MAPPINGS="config.json:/app/config.json"
+
+
+# ==============================================
+# Target 3 - Different Private Registry
+# ==============================================
+[dev]
+SSH_HOST="your-dev-host"
+CONTAINER_NAME="myapp-dev"
+CONTAINER_PORT="3000"
+HOST_PORT="8080"
+# Override with different image and credentials
+CONTAINER_IMAGE="ghcr.io/another-org/dev-image:latest"
+GHCR_USERNAME="dev-user"
+GHCR_TOKEN="ghp_dev_token_here"

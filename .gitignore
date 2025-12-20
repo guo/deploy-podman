@@ -3,9 +3,13 @@
 .env.*
 targets.config
 
+# Container directories (contain sensitive config files)
+targets/
+
 # Logs
 *.log
 deploy-*.log
+.deploy-*.result
 
 # macOS
 .DS_Store

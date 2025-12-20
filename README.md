@@ -32,20 +32,52 @@ The deployment script automates the process of:
    vi targets.config
    ```
 
-2. **Create env files**
+2. **Create container directories**
    ```bash
-   # Copy the example for each target you need
-   cp env.example .env.deployment1
-   cp env.example .env.deployment2
+   # Create targets directory
+   mkdir -p targets
 
-   # Edit each .env file with target-specific values
-   vi .env.deployment1
+   # Create a directory for each container (use CONTAINER_NAME from config)
+   mkdir -p targets/myapp-prod
+   mkdir -p targets/myapp-staging
+
+   # Create .env file in each container directory
+   cp env.example targets/myapp-prod/.env
+   cp env.example targets/myapp-staging/.env
+
+   # Edit .env files with target-specific values
+   vi targets/myapp-prod/.env
+   vi targets/myapp-staging/.env
+
+   # Add additional config files if needed
+   echo '{"key":"value"}' > targets/myapp-prod/config.json
    ```
 
-**Important**: The `targets.config` and `.env*` files contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
+**Important**: The `targets.config` and `targets/` directory contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
 
 
 ## Multi-Server Configuration
+
+### Directory Structure
+
+All container directories are organized under the `targets/` folder:
+
+```
+deploy-podman/
+├── targets.config
+├── targets/
+│   ├── myapp-prod/
+│   │   ├── .env              # Required: environment variables
+│   │   ├── config.json       # Optional: additional config files
+│   │   └── data.txt          # Optional: data files
+│   └── myapp-staging/
+│       ├── .env              # Required: environment variables
+│       └── config.json       # Optional: additional config files
+├── deploy-podman-ssh.sh
+└── deploy-multi.sh
+```
+
+Files are uploaded to remote host at `/var/app/${CONTAINER_NAME}/`
 
 ### targets.config Structure
 
@@ -53,36 +85,56 @@ The `targets.config` file uses an INI-style format with sections for each target
 
 ```bash
 # Common Configuration (shared across all targets)
+# These serve as defaults and can be overridden per-target
 CONTAINER_IMAGE="ghcr.io/xxx/xxxx"
 GHCR_USERNAME="user"
 GHCR_TOKEN="ghp_..."
 
-# Target-specific configuration
-[deployment1]
-SSH_HOST="DEPLOYMENT1_HOST"
-CONTAINER_NAME="container_name"
+# Target 1 - Uses global credentials
+[prod1]
+SSH_HOST="PROD_HOST"
+CONTAINER_NAME="myapp-prod"
 CONTAINER_PORT="3000"
 HOST_PORT="80"
-ENV_FILE=".env.deployment1"
-ENV_FILE_REMOTE_PATH="/path/to/env/file/on/remote/server"
+FILE_MAPPINGS="config.json:/app/config.json"
 
-[deployment2]
-SSH_HOST="DEPLOYMENT2_HOST"
-CONTAINER_NAME="container_name"
+# Target 2 - Public image (no credentials)
+[staging]
+SSH_HOST="STAGING_HOST"
+CONTAINER_NAME="myapp-staging"
 CONTAINER_PORT="3000"
 HOST_PORT="80"
-ENV_FILE=".env.deployment2"
-ENV_FILE_REMOTE_PATH="/path/to/env/file/on/remote/server"
+CONTAINER_IMAGE="nginx:latest"  # Override with public image
+GHCR_USERNAME=""                # No credentials needed
+GHCR_TOKEN=""
+
+# Target 3 - Different private registry
+[dev]
+SSH_HOST="DEV_HOST"
+CONTAINER_NAME="myapp-dev"
+CONTAINER_PORT="3000"
+HOST_PORT="8080"
+CONTAINER_IMAGE="ghcr.io/other-org/dev:latest"  # Override image
+GHCR_USERNAME="dev-user"                         # Override credentials
+GHCR_TOKEN="ghp_dev_token"
 ```
 
-### Env Files
+### Configuration Inheritance
 
-Each target has its own `.env` file:
+Each target can override global settings:
 
-| File | Target | Purpose |
-|------|--------|---------|
-| `.env.deployment1` | Deployment 1 | First deployment target |
-| `.env.deployment2` | Deployment 2 | Second deployment target |
+- **CONTAINER_IMAGE** - Defaults to global value, can be overridden per-target
+- **GHCR_USERNAME** - Defaults to global value, can be overridden per-target
+- **GHCR_TOKEN** - Defaults to global value, can be overridden per-target
+- **Public images** - Set `GHCR_USERNAME=""` and `GHCR_TOKEN=""` to skip authentication
+
+### File Mappings
+
+`FILE_MAPPINGS` allows you to mount additional files from the container directory into the container:
+
+- **Format**: `"local_file:container_path,local_file2:container_path2"`
+- **Local paths**: Relative to `targets/${CONTAINER_NAME}/` directory
+- **Optional**: Omit if you only need environment variables
 
 ## Quick Start
 
@@ -186,16 +238,19 @@ Check these files if a deployment fails.
 The deployment script performs these steps for the selected target:
 
 1. **Parses configuration** - Reads targets.config for the specified target
-2. **Validates files** - Checks that env file exists
+2. **Validates directory** - Checks that `targets/${CONTAINER_NAME}/` directory and `.env` file exist
 3. **Verifies SSH** - Tests connection to the target server
 4. **Checks Podman** - Installs if not present
-5. **Uploads env file** - Copies the appropriate `.env.*` file
-6. **Authenticates** - Logs into GitHub Container Registry
-7. **Pulls latest image** - Downloads the newest container version
-8. **Updates container**:
+5. **Uploads files** - Copies entire container directory to `/var/app/${CONTAINER_NAME}/`
+6. **Authenticates** - Logs into container registry (skipped for public images)
+7. **Pulls latest image** - Downloads the newest container version (with or without credentials)
+8. **Processes file mappings** - Parses `FILE_MAPPINGS` and builds volume mount arguments
+9. **Updates container**:
    - If exists: Stops, removes, and recreates with latest image
    - If new: Creates fresh deployment
-9. **Verifies** - Confirms container is running and shows logs
+   - Uses `--env-file` for environment variables
+   - Mounts additional files via `-v` flags
+10. **Verifies** - Confirms container is running and shows logs
 
 ## Update Existing Deployment
 
