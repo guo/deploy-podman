@@ -1,0 +1,15 @@
+# Sensitive files
+.env
+.env.*
+deploy.config
+
+# Logs
+*.log
+deploy-*.log
+
+# macOS
+.DS_Store
+
+# Backup files
+*.bak
+*~
