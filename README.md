@@ -6,14 +6,14 @@ This repository contains an automated deployment script for running containers a
 
 The deployment script automates the process of:
 - Installing Podman on remote hosts
-- Managing multiple environments (production, staging, demo, development)
-- Uploading environment-specific configurations
+- Managing multiple targets (production, staging, demo, development)
+- Uploading target-specific configurations
 - Authenticating with GitHub Container Registry
 - Deploying or updating containers with zero downtime
 
 ## Prerequisites
 
-- SSH access to target hosts (configured in `deploy.config`)
+- SSH access to target hosts (configured in `targets.config`)
 - Sudo privileges on remote hosts
 - GitHub Container Registry credentials
 - SSH keys configured for passwordless authentication
@@ -23,41 +23,41 @@ The deployment script automates the process of:
 1. **Create deployment configuration**
    ```bash
    # Copy the example configuration
-   cp deploy.config.example deploy.config
+   cp targets.config.example targets.config
 
-   # Edit deploy.config with your actual values:
+   # Edit targets.config with your actual values:
    # - GHCR_USERNAME and GHCR_TOKEN for GitHub Container Registry
-   # - SSH_HOST for each environment
+   # - SSH_HOST for each target
    # - Container names, ports, and paths
-   vi deploy.config
+   vi targets.config
    ```
 
-2. **Create environment files**
+2. **Create env files**
    ```bash
-   # Copy the example for each environment you need
+   # Copy the example for each target you need
    cp env.example .env.deployment1
    cp env.example .env.deployment2
 
-   # Edit each .env file with environment-specific values
+   # Edit each .env file with target-specific values
    vi .env.deployment1
    ```
 
-**Important**: The `deploy.config` and `.env*` files contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
+**Important**: The `targets.config` and `.env*` files contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
 
 
 ## Multi-Server Configuration
 
-### deploy.config Structure
+### targets.config Structure
 
-The `deploy.config` file uses an INI-style format with sections for each environment:
+The `targets.config` file uses an INI-style format with sections for each target:
 
 ```bash
-# Common Configuration (shared across all environments)
+# Common Configuration (shared across all targets)
 CONTAINER_IMAGE="ghcr.io/xxx/xxxx"
 GHCR_USERNAME="user"
 GHCR_TOKEN="ghp_..."
 
-# Environment-specific configuration
+# Target-specific configuration
 [deployment1]
 SSH_HOST="DEPLOYMENT1_HOST"
 CONTAINER_NAME="container_name"
@@ -75,29 +75,29 @@ ENV_FILE=".env.deployment2"
 ENV_FILE_REMOTE_PATH="/path/to/env/file/on/remote/server"
 ```
 
-### Environment Files
+### Env Files
 
-Each environment has its own `.env` file:
+Each target has its own `.env` file:
 
-| File | Environment | Purpose |
-|------|-------------|---------|
-| `.env.deployment1` | Deployment 1 | First deployment environment |
-| `.env.deployment2` | Deployment 2 | Second deployment environment |
+| File | Target | Purpose |
+|------|--------|---------|
+| `.env.deployment1` | Deployment 1 | First deployment target |
+| `.env.deployment2` | Deployment 2 | Second deployment target |
 
 ## Quick Start
 
-### 1. Configure Environments
+### 1. Configure Targets
 
-Edit `deploy.config` to set up your server configurations:
-- Update SSH hosts for each environment
+Edit `targets.config` to set up your server configurations:
+- Update SSH hosts for each target
 - Configure container names and ports
 - Set GitHub Container Registry credentials
 
 ### 2. Configure Environment Variables
 
-Edit the appropriate `.env.*` file for your environment:
+Edit the appropriate `.env.*` file for your target:
 
-### 3. Deploy to Specific Environment
+### 3. Deploy to Specific Target
 
 ```bash
 # Deploy to deployment1
@@ -107,7 +107,7 @@ Edit the appropriate `.env.*` file for your environment:
 ./deploy-podman-ssh.sh deployment2
 ```
 
-### 4. List Available Environments
+### 4. List Available Targets
 
 ```bash
 ./deploy-podman-ssh.sh --help
@@ -115,9 +115,9 @@ Edit the appropriate `.env.*` file for your environment:
 
 Output:
 ```
-Usage: ./deploy-podman-ssh.sh <environment>
+Usage: ./deploy-podman-ssh.sh <target>
 
-Available environments:
+Available targets:
   - deployment1
   - deployment2
 
@@ -125,56 +125,57 @@ Example: ./deploy-podman-ssh.sh deployment1
          ./deploy-podman-ssh.sh deployment2
 ```
 
-## Deploy to All Environments
+## Deploy to Multiple Targets
 
-Use the `deploy-all.sh` script to deploy to multiple environments at once.
+Use the `deploy-multi.sh` script to deploy to multiple targets at once.
 
-### Deploy to All Environments Sequentially
+### Deploy to All Targets
 
 ```bash
-./deploy-all.sh
+# Deploy to all targets sequentially (with confirmation)
+./deploy-multi.sh --all
+
+# Deploy to all targets in parallel
+./deploy-multi.sh --all --parallel
 ```
 
-This will deploy to all configured environments one by one (default mode).
+When using `--all`, the script will:
+1. List all configured targets
+2. Ask for confirmation before proceeding
 
-### Deploy to All Environments in Parallel
-
-```bash
-./deploy-all.sh --parallel
-```
-
-This deploys to all environments simultaneously (faster but uses more resources).
-
-### Deploy to Specific Environments
+### Deploy to Specific Targets
 
 ```bash
-# Deploy only to deployment1 and deployment2
-./deploy-all.sh deployment1 deployment2
+# Deploy to specific targets sequentially
+./deploy-multi.sh deployment1 deployment2
 
-# Deploy to both deployments in parallel
-./deploy-all.sh --parallel deployment1 deployment2
+# Deploy to specific targets in parallel
+./deploy-multi.sh --parallel deployment1 deployment2
 ```
 
 ### Options
 
 ```
-Usage: ./deploy-all.sh [OPTIONS] [ENVIRONMENTS...]
+Usage: ./deploy-multi.sh [OPTIONS] <TARGETS...>
 
 Options:
-  -p, --parallel     Deploy to all environments in parallel (faster)
-  -s, --sequential   Deploy to all environments sequentially (default)
+  --all              Deploy to all configured targets
+  -p, --parallel     Deploy in parallel (faster)
+  -s, --sequential   Deploy sequentially (default)
   -h, --help         Show help message
 
 Examples:
-  ./deploy-all.sh                           # Deploy to all sequentially
-  ./deploy-all.sh --parallel                # Deploy to all in parallel
-  ./deploy-all.sh deployment1 deployment2   # Deploy only to deployment1 and deployment2
-  ./deploy-all.sh -p deployment1 deployment2 # Deploy to both deployments in parallel
+  ./deploy-multi.sh --all                     # Deploy to all (with confirmation)
+  ./deploy-multi.sh --all --parallel          # Deploy to all in parallel
+  ./deploy-multi.sh staging production        # Deploy to staging and production
+  ./deploy-multi.sh -p staging production     # Deploy to both in parallel
 ```
+
+Note: Running `./deploy-multi.sh` without arguments will show the help message.
 
 ### Deployment Logs
 
-Each environment's deployment creates a log file:
+Each target's deployment creates a log file:
 - `deploy-deployment1.log`
 - `deploy-deployment2.log`
 
@@ -182,13 +183,13 @@ Check these files if a deployment fails.
 
 ## How It Works
 
-The deployment script performs these steps for the selected environment:
+The deployment script performs these steps for the selected target:
 
-1. **Parses configuration** - Reads deploy.config for the specified environment
-2. **Validates files** - Checks that environment file exists
+1. **Parses configuration** - Reads targets.config for the specified target
+2. **Validates files** - Checks that env file exists
 3. **Verifies SSH** - Tests connection to the target server
 4. **Checks Podman** - Installs if not present
-5. **Uploads environment** - Copies the appropriate `.env.*` file
+5. **Uploads env file** - Copies the appropriate `.env.*` file
 6. **Authenticates** - Logs into GitHub Container Registry
 7. **Pulls latest image** - Downloads the newest container version
 8. **Updates container**:

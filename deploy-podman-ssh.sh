@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Function to parse INI-style config
 parse_config() {
     local config_file="$1"
-    local environment="$2"
+    local target="$2"
     local in_section=false
 
     # First, read common configuration (before any section)
@@ -28,7 +28,7 @@ parse_config() {
         [[ -n "$key" && -n "$value" ]] && export "$key=$value"
     done < "$config_file"
 
-    # Now read environment-specific configuration
+    # Now read target-specific configuration
     while IFS='=' read -r key value; do
         # Skip comments and empty lines
         [[ "$key" =~ ^[[:space:]]*# ]] && continue
@@ -37,7 +37,7 @@ parse_config() {
         # Check for section header
         if [[ "$key" =~ ^\[(.*)\]$ ]]; then
             section="${BASH_REMATCH[1]}"
-            if [[ "$section" == "$environment" ]]; then
+            if [[ "$section" == "$target" ]]; then
                 in_section=true
             else
                 in_section=false
@@ -54,19 +54,19 @@ parse_config() {
     done < "$config_file"
 }
 
-# Function to list available environments
-list_environments() {
-    echo "Available environments:"
-    grep -E '^\[.*\]$' "${SCRIPT_DIR}/deploy.config" | sed 's/\[\(.*\)\]/  - \1/'
+# Function to list available targets
+list_targets() {
+    echo "Available targets:"
+    grep -E '^\[.*\]$' "${SCRIPT_DIR}/targets.config" | sed 's/\[\(.*\)\]/  - \1/'
 }
 
 # Check arguments
-ENVIRONMENT="${1:-demo}"
+TARGET="${1:-demo}"
 
-if [[ "$ENVIRONMENT" == "--help" || "$ENVIRONMENT" == "-h" ]]; then
-    echo "Usage: $0 <environment>"
+if [[ "$TARGET" == "--help" || "$TARGET" == "-h" ]]; then
+    echo "Usage: $0 <target>"
     echo ""
-    list_environments
+    list_targets
     echo ""
     echo "Example: $0 production"
     echo "         $0 staging"
@@ -75,35 +75,38 @@ if [[ "$ENVIRONMENT" == "--help" || "$ENVIRONMENT" == "-h" ]]; then
 fi
 
 # Load configuration
-if [ ! -f "${SCRIPT_DIR}/deploy.config" ]; then
-    echo "Error: deploy.config not found in ${SCRIPT_DIR}"
+if [ ! -f "${SCRIPT_DIR}/targets.config" ]; then
+    echo "Error: targets.config not found in ${SCRIPT_DIR}"
     exit 1
 fi
 
-# Parse config for the specified environment
-parse_config "${SCRIPT_DIR}/deploy.config" "$ENVIRONMENT"
+# Parse config for the specified target
+parse_config "${SCRIPT_DIR}/targets.config" "$TARGET"
 
-# Verify environment was found
+# Verify target was found
 if [ -z "$SSH_HOST" ]; then
-    echo "Error: Environment '$ENVIRONMENT' not found in deploy.config"
+    echo "Error: Target '$TARGET' not found in targets.config"
     echo ""
-    list_environments
+    list_targets
     exit 1
 fi
 
-# Check if environment file exists
+# Check if env file exists
 if [ ! -f "${SCRIPT_DIR}/${ENV_FILE}" ]; then
-    echo "Error: Environment file '${ENV_FILE}' not found in ${SCRIPT_DIR}"
+    echo "Error: Env file '${ENV_FILE}' not found in ${SCRIPT_DIR}"
     exit 1
 fi
 
+# Auto-generate remote env file path based on container name
+ENV_FILE_REMOTE_PATH="/var/app/${CONTAINER_NAME}/.env"
+
 echo "========================================="
-echo "Multiple Env Podman Deployment Script"
+echo "Podman Deployment Script"
 echo "========================================="
-echo "Environment: $ENVIRONMENT"
+echo "Target: $TARGET"
 echo "SSH Host: $SSH_HOST"
 echo "Container: $CONTAINER_NAME"
-echo "Env File: $ENV_FILE"
+echo "Env File: $ENV_FILE -> ${ENV_FILE_REMOTE_PATH}"
 echo ""
 
 # Check SSH connection
@@ -126,13 +129,13 @@ else
 fi
 echo ""
 
-# Upload environment file to remote host
-echo "[3/7] Uploading environment file..."
+# Upload env file to remote host
+echo "[3/7] Uploading env file..."
 # Ensure the remote directory exists
 REMOTE_DIR=$(dirname "${ENV_FILE_REMOTE_PATH}")
 ssh ${SSH_HOST} "mkdir -p ${REMOTE_DIR}"
 scp "${SCRIPT_DIR}/${ENV_FILE}" ${SSH_HOST}:${ENV_FILE_REMOTE_PATH}
-echo "✓ Environment file uploaded to ${ENV_FILE_REMOTE_PATH}"
+echo "✓ Env file uploaded to ${ENV_FILE_REMOTE_PATH}"
 echo ""
 
 # Login to GitHub Container Registry
@@ -205,7 +208,7 @@ echo "========================================="
 echo "Deployment completed successfully!"
 echo "========================================="
 echo ""
-echo "Environment: ${ENVIRONMENT}"
+echo "Target: ${TARGET}"
 echo "Container: ${CONTAINER_NAME}"
 echo "Image: ${CONTAINER_IMAGE}"
 echo "Port Mapping: ${HOST_PORT} (host) -> ${CONTAINER_PORT} (container)"

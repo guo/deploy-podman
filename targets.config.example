@@ -1,27 +1,26 @@
-# Multi-Server Deployment Configuration
-# Copy this file to 'deploy.config' and fill in your actual values
-# Usage: ./deploy-podman-ssh.sh <environment>
+# Copy this file to 'targets.config' and fill in your actual values
+# Usage: ./deploy-podman-ssh.sh <target>
 # Example: ./deploy-podman-ssh.sh production
 
-# Common Configuration (shared across all environments)
+# Common Configuration (shared across all targets)
 CONTAINER_IMAGE="ghcr.io/your-org/your-image:latest"
 GHCR_USERNAME="your-github-username"
 # setup classic personal token with package:read permission
 GHCR_TOKEN="ghp_your_github_personal_access_token_here"
 
 # ==============================================
-# Deployment 1
+# Target 1
 # ==============================================
 [prod1]
 SSH_HOST="your-prod-host"
 CONTAINER_NAME="your-container-name"
 CONTAINER_PORT="80"
-ENV_FILE=".env.deployment1"
+ENV_FILE=".env.Target1"
 ENV_FILE_REMOTE_PATH="path-to-env-file"
 
 
 # ==============================================
-# Deployment 2
+# Target 2
 # ==============================================
 [staging]
 SSH_HOST="your-prod-host"

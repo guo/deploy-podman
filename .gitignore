@@ -1,7 +1,7 @@
 # Sensitive files
 .env
 .env.*
-deploy.config
+targets.config
 
 # Logs
 *.log
