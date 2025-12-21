@@ -28,8 +28,8 @@ GHCR_TOKEN="ghp_your_github_personal_access_token_here"
 [prod1]
 SSH_HOST="your-prod-host"
 CONTAINER_NAME="myapp-prod"
-CONTAINER_PORT="3000"
-HOST_PORT="80"
+# Port mappings: "host_port:container_port,host_port2:container_port2"
+PORT_MAPPINGS="80:3000,443:3443"
 # Optional: Override global image/credentials
 # CONTAINER_IMAGE="ghcr.io/your-org/another-image:latest"
 # GHCR_USERNAME="another-user"
@@ -46,8 +46,7 @@ FILE_MAPPINGS="config.json:/app/config.json,data.txt:/app/data/data.txt"
 [staging]
 SSH_HOST="your-staging-host"
 CONTAINER_NAME="myapp-staging"
-CONTAINER_PORT="3000"
-HOST_PORT="80"
+PORT_MAPPINGS="80:80"
 # Use a public Docker Hub image (no credentials required)
 CONTAINER_IMAGE="nginx:latest"
 # Leave credentials empty for public images
@@ -62,8 +61,7 @@ FILE_MAPPINGS="config.json:/app/config.json"
 [dev]
 SSH_HOST="your-dev-host"
 CONTAINER_NAME="myapp-dev"
-CONTAINER_PORT="3000"
-HOST_PORT="8080"
+PORT_MAPPINGS="8080:3000"
 # Override with different image and credentials
 CONTAINER_IMAGE="ghcr.io/another-org/dev-image:latest"
 GHCR_USERNAME="dev-user"

@@ -39,8 +39,9 @@ The `parse_config()` function in deploy-podman-ssh.sh handles reading both commo
   - Parses targets.config for specified target
   - Validates local container directory structure (targets/${CONTAINER_NAME}/ and .env file)
   - Uploads entire container directory to remote `/var/app/${CONTAINER_NAME}/`
+  - Parses PORT_MAPPINGS (host:container format, comma-separated for multiple ports)
   - Parses FILE_MAPPINGS to build volume mount arguments
-  - Executes 8-step deployment process: SSH verification, Podman installation, file upload, GHCR authentication, image pull, file mapping processing, container update/creation, verification
+  - Executes 9-step deployment process: SSH verification, Podman installation, file upload, GHCR authentication, image pull, port/file mapping processing, container update/creation, verification
   - Handles both new deployments and updates to existing containers
   - Auto-generates remote paths based on container name
 

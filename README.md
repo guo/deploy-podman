@@ -94,16 +94,14 @@ GHCR_TOKEN="ghp_..."
 [prod1]
 SSH_HOST="PROD_HOST"
 CONTAINER_NAME="myapp-prod"
-CONTAINER_PORT="3000"
-HOST_PORT="80"
+PORT_MAPPINGS="80:3000,443:3443"  # Multiple port mappings
 FILE_MAPPINGS="config.json:/app/config.json"
 
 # Target 2 - Public image (no credentials)
 [staging]
 SSH_HOST="STAGING_HOST"
 CONTAINER_NAME="myapp-staging"
-CONTAINER_PORT="3000"
-HOST_PORT="80"
+PORT_MAPPINGS="80:80"
 CONTAINER_IMAGE="nginx:latest"  # Override with public image
 GHCR_USERNAME=""                # No credentials needed
 GHCR_TOKEN=""
@@ -112,8 +110,7 @@ GHCR_TOKEN=""
 [dev]
 SSH_HOST="DEV_HOST"
 CONTAINER_NAME="myapp-dev"
-CONTAINER_PORT="3000"
-HOST_PORT="8080"
+PORT_MAPPINGS="8080:3000"
 CONTAINER_IMAGE="ghcr.io/other-org/dev:latest"  # Override image
 GHCR_USERNAME="dev-user"                         # Override credentials
 GHCR_TOKEN="ghp_dev_token"
@@ -127,6 +124,16 @@ Each target can override global settings:
 - **GHCR_USERNAME** - Defaults to global value, can be overridden per-target
 - **GHCR_TOKEN** - Defaults to global value, can be overridden per-target
 - **Public images** - Set `GHCR_USERNAME=""` and `GHCR_TOKEN=""` to skip authentication
+
+### Port Mappings
+
+`PORT_MAPPINGS` defines how ports are mapped from host to container:
+
+- **Format**: `"host_port:container_port,host_port2:container_port2"`
+- **Examples**:
+  - Single port: `PORT_MAPPINGS="80:3000"`
+  - Multiple ports: `PORT_MAPPINGS="80:3000,443:3443"`
+- **Optional**: Can be omitted if container doesn't expose ports
 
 ### File Mappings
 
@@ -242,15 +249,17 @@ The deployment script performs these steps for the selected target:
 3. **Verifies SSH** - Tests connection to the target server
 4. **Checks Podman** - Installs if not present
 5. **Uploads files** - Copies entire container directory to `/var/app/${CONTAINER_NAME}/`
-6. **Authenticates** - Logs into container registry (skipped for public images)
-7. **Pulls latest image** - Downloads the newest container version (with or without credentials)
-8. **Processes file mappings** - Parses `FILE_MAPPINGS` and builds volume mount arguments
-9. **Updates container**:
+6. **Processes port mappings** - Parses `PORT_MAPPINGS` and builds port arguments
+7. **Processes file mappings** - Parses `FILE_MAPPINGS` and builds volume mount arguments
+8. **Authenticates** - Logs into container registry (skipped for public images)
+9. **Pulls latest image** - Downloads the newest container version (with or without credentials)
+10. **Updates container**:
    - If exists: Stops, removes, and recreates with latest image
    - If new: Creates fresh deployment
    - Uses `--env-file` for environment variables
+   - Maps ports via `-p` flags
    - Mounts additional files via `-v` flags
-10. **Verifies** - Confirms container is running and shows logs
+11. **Verifies** - Confirms container is running and shows logs
 
 ## Update Existing Deployment
 

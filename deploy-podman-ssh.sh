@@ -10,6 +10,7 @@ parse_config() {
     local config_file="$1"
     local target="$2"
     local in_section=false
+    local section_pattern='^\[(.*)\]$'
 
     # First, read common configuration (before any section)
     while IFS='=' read -r key value; do
@@ -18,7 +19,7 @@ parse_config() {
         [[ -z "$key" ]] && continue
 
         # Check for section header
-        if [[ "$key" =~ ^\[.*\]$ ]]; then
+        if [[ "$key" =~ $section_pattern ]]; then
             break
         fi
 
@@ -35,7 +36,7 @@ parse_config() {
         [[ -z "$key" ]] && continue
 
         # Check for section header
-        if [[ "$key" =~ ^\[(.*)\]$ ]]; then
+        if [[ "$key" =~ $section_pattern ]]; then
             section="${BASH_REMATCH[1]}"
             if [[ "$section" == "$target" ]]; then
                 in_section=true
@@ -131,7 +132,7 @@ echo "Remote Dir: ${REMOTE_BASE_DIR}"
 echo ""
 
 # Check SSH connection
-echo "[1/8] Checking SSH connection to ${SSH_HOST}..."
+echo "[1/9] Checking SSH connection to ${SSH_HOST}..."
 if ! ssh ${SSH_HOST} "echo 'SSH connection successful'" >/dev/null 2>&1; then
     echo "Error: Cannot connect to ${SSH_HOST}"
     exit 1
@@ -140,7 +141,7 @@ echo "✓ SSH connection verified"
 echo ""
 
 # Check if podman is installed
-echo "[2/8] Checking Podman installation..."
+echo "[2/9] Checking Podman installation..."
 if ! ssh ${SSH_HOST} "command -v podman >/dev/null 2>&1"; then
     echo "Podman not found. Installing..."
     ssh ${SSH_HOST} "sudo apt-get update && sudo apt-get install -y podman"
@@ -151,41 +152,62 @@ fi
 echo ""
 
 # Upload container directory to remote host
-echo "[3/8] Uploading container files..."
+echo "[3/9] Uploading container files..."
 # Ensure the remote directory exists
 ssh ${SSH_HOST} "mkdir -p ${REMOTE_BASE_DIR}"
-# Upload all files from container directory
-scp -r "${CONTAINER_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/
+# Upload all files from container directory (including hidden files)
+shopt -s dotglob  # Enable matching hidden files
+scp -r "${CONTAINER_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/ 2>/dev/null || \
+    echo "Warning: No files to upload (this is normal if directory is empty)"
+shopt -u dotglob  # Disable dotglob
 echo "✓ Container files uploaded to ${REMOTE_BASE_DIR}"
 echo ""
 
 # Login to container registry (if credentials provided)
 if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
-    echo "[4/8] Logging into GitHub Container Registry..."
+    echo "[4/9] Logging into GitHub Container Registry..."
     ssh ${SSH_HOST} "echo '${GHCR_TOKEN}' | podman login ghcr.io -u ${GHCR_USERNAME} --password-stdin" >/dev/null 2>&1
     echo "✓ Logged in successfully"
     echo ""
 
     # Pull latest image with credentials
-    echo "[5/8] Pulling latest container image (authenticated)..."
+    echo "[5/9] Pulling latest container image (authenticated)..."
     ssh ${SSH_HOST} "podman pull --creds ${GHCR_USERNAME}:${GHCR_TOKEN} ${CONTAINER_IMAGE}"
     echo "✓ Latest image pulled"
     echo ""
 else
-    echo "[4/8] Skipping container registry login (no credentials provided)"
+    echo "[4/9] Skipping container registry login (no credentials provided)"
     echo ""
 
     # Pull latest image without credentials (public image)
-    echo "[5/8] Pulling latest container image (public)..."
+    echo "[5/9] Pulling latest container image (public)..."
     ssh ${SSH_HOST} "podman pull ${CONTAINER_IMAGE}"
     echo "✓ Latest image pulled"
     echo ""
 fi
 
+# Parse PORT_MAPPINGS and build port arguments
+PORT_ARGS=""
+if [ -n "$PORT_MAPPINGS" ]; then
+    echo "[6/8] Processing port mappings..."
+    IFS=',' read -ra PORTS <<< "$PORT_MAPPINGS"
+    for port_mapping in "${PORTS[@]}"; do
+        # Trim whitespace
+        port_mapping=$(echo "$port_mapping" | xargs)
+        # Add port mapping argument
+        PORT_ARGS="${PORT_ARGS} -p ${port_mapping}"
+        echo "  → Port: ${port_mapping}"
+    done
+    echo "✓ Port mappings configured"
+else
+    echo "[6/8] No port mappings specified (container will not expose ports)"
+fi
+echo ""
+
 # Parse FILE_MAPPINGS and build volume mount arguments
 VOLUME_MOUNTS=""
 if [ -n "$FILE_MAPPINGS" ]; then
-    echo "[6/8] Processing file mappings..."
+    echo "[7/8] Processing file mappings..."
     IFS=',' read -ra MAPPINGS <<< "$FILE_MAPPINGS"
     for mapping in "${MAPPINGS[@]}"; do
         # Split mapping into local_file:container_path
@@ -203,12 +225,12 @@ if [ -n "$FILE_MAPPINGS" ]; then
     done
     echo "✓ File mappings configured"
 else
-    echo "[6/8] No file mappings specified"
+    echo "[7/8] No file mappings specified"
 fi
 echo ""
 
 # Check if container exists
-echo "[7/8] Checking for existing container..."
+echo "[8/8] Checking for existing container..."
 CONTAINER_EXISTS=$(ssh ${SSH_HOST} "podman ps -a --format '{{.Names}}' | grep -c '^${CONTAINER_NAME}$' || true")
 
 if [ "$CONTAINER_EXISTS" -gt 0 ]; then
@@ -224,21 +246,21 @@ if [ "$CONTAINER_EXISTS" -gt 0 ]; then
 
     # Start new container with latest image
     echo "  → Starting new container with latest image..."
-    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE} -p ${HOST_PORT}:${CONTAINER_PORT}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
+    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
 
     echo "✓ Container updated to latest version"
 else
     echo "Container '${CONTAINER_NAME}' not found. Creating new deployment..."
 
     # Start new container
-    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE} -p ${HOST_PORT}:${CONTAINER_PORT}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
+    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
 
     echo "✓ Container deployed successfully"
 fi
 echo ""
 
 # Verify deployment
-echo "[8/8] Verifying deployment..."
+echo "[9/9] Verifying deployment..."
 sleep 3
 CONTAINER_STATUS=$(ssh ${SSH_HOST} "podman ps --filter name=${CONTAINER_NAME} --format '{{.Status}}'")
 
