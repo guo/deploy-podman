@@ -1,0 +1,24 @@
+# Podman Deployment Configuration
+# This is a template - copy to .config (global) or targets/{target}/.config (per-target)
+
+# Container image to deploy
+CONTAINER_IMAGE="ghcr.io/your-org/your-image:latest"
+
+# GitHub Container Registry credentials (leave empty for public images)
+GHCR_USERNAME=""
+GHCR_TOKEN=""
+
+# SSH host to deploy to
+SSH_HOST="your-hostname"
+
+# Container name (defaults to target directory name if not specified)
+CONTAINER_NAME=""
+
+# Port mappings (format: host:container, comma-separated for multiple ports)
+# Example: "80:3000,443:3001"
+PORT_MAPPINGS=""
+
+# File mappings (format: local_file:container_path, comma-separated)
+# Paths are relative to target directory
+# Example: "config.json:/app/config.json,data.db:/app/data/data.db"
+FILE_MAPPINGS=""

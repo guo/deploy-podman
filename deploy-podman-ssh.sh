@@ -5,113 +5,88 @@ set -e
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Function to parse INI-style config
-parse_config() {
-    local config_file="$1"
-    local target="$2"
-    local in_section=false
-    local section_pattern='^\[(.*)\]$'
-
-    # First, read common configuration (before any section)
-    while IFS='=' read -r key value; do
-        # Skip comments and empty lines
-        [[ "$key" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$key" ]] && continue
-
-        # Check for section header
-        if [[ "$key" =~ $section_pattern ]]; then
-            break
-        fi
-
-        # Remove quotes and export
-        key=$(echo "$key" | xargs)
-        value=$(echo "$value" | xargs | sed 's/^"\(.*\)"$/\1/')
-        [[ -n "$key" && -n "$value" ]] && export "$key=$value"
-    done < "$config_file"
-
-    # Now read target-specific configuration
-    while IFS='=' read -r key value; do
-        # Skip comments and empty lines
-        [[ "$key" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$key" ]] && continue
-
-        # Check for section header
-        if [[ "$key" =~ $section_pattern ]]; then
-            section="${BASH_REMATCH[1]}"
-            if [[ "$section" == "$target" ]]; then
-                in_section=true
-            else
-                in_section=false
-            fi
-            continue
-        fi
-
-        # If we're in the right section, export variables
-        if [[ "$in_section" == true ]]; then
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs | sed 's/^"\(.*\)"$/\1/')
-            [[ -n "$key" && -n "$value" ]] && export "$key=$value"
-        fi
-    done < "$config_file"
-}
-
 # Function to list available targets
 list_targets() {
     echo "Available targets:"
-    grep -E '^\[.*\]$' "${SCRIPT_DIR}/targets.config" | sed 's/\[\(.*\)\]/  - \1/'
+    if [ -d "${SCRIPT_DIR}/targets" ]; then
+        for dir in "${SCRIPT_DIR}/targets"/*/ ; do
+            if [ -d "$dir" ]; then
+                target_name=$(basename "$dir")
+                echo "  - $target_name"
+            fi
+        done
+    else
+        echo "  (no targets found - create targets/ directory)"
+    fi
 }
 
 # Check arguments
-TARGET="${1:-demo}"
-
-if [[ "$TARGET" == "--help" || "$TARGET" == "-h" ]]; then
+if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
     echo "Usage: $0 <target>"
+    echo ""
+    echo "Deploy a containerized application to a remote server via SSH."
     echo ""
     list_targets
     echo ""
-    echo "Example: $0 production"
-    echo "         $0 staging"
-    echo "         $0 demo (default)"
+    echo "Setup:"
+    echo "  1. cp .config.example .config              # Create global defaults (optional)"
+    echo "  2. mkdir -p targets/myapp                  # Create target directory"
+    echo "  3. cp .config.example targets/myapp/.config # Create target config"
+    echo "  4. cp env.example targets/myapp/.env       # Create environment file"
+    echo "  5. Edit targets/myapp/.config and .env with your settings"
+    echo ""
+    echo "Example: $0 myapp"
     exit 0
 fi
 
-# Load configuration
-if [ ! -f "${SCRIPT_DIR}/targets.config" ]; then
-    echo "Error: targets.config not found in ${SCRIPT_DIR}"
-    exit 1
-fi
+TARGET="$1"
+TARGET_DIR="${SCRIPT_DIR}/targets/${TARGET}"
 
-# Parse config for the specified target
-parse_config "${SCRIPT_DIR}/targets.config" "$TARGET"
-
-# Verify target was found
-if [ -z "$SSH_HOST" ]; then
-    echo "Error: Target '$TARGET' not found in targets.config"
+# Verify target directory exists
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Target directory not found: ${TARGET_DIR}"
+    echo ""
+    echo "Create it with: mkdir -p targets/${TARGET}"
     echo ""
     list_targets
     exit 1
 fi
 
-# Check if targets directory exists
-TARGETS_DIR="${SCRIPT_DIR}/targets"
-if [ ! -d "${TARGETS_DIR}" ]; then
-    echo "Error: targets/ directory not found in ${SCRIPT_DIR}"
-    echo "Please create: mkdir -p targets"
+# Load global config if it exists (defaults)
+if [ -f "${SCRIPT_DIR}/.config" ]; then
+    source "${SCRIPT_DIR}/.config"
+fi
+
+# Load target-specific config (overrides global)
+if [ -f "${TARGET_DIR}/.config" ]; then
+    source "${TARGET_DIR}/.config"
+else
+    echo "Error: Target config not found: ${TARGET_DIR}/.config"
+    echo ""
+    echo "Create it with: cp .config.example targets/${TARGET}/.config"
     exit 1
 fi
 
-# Check if container directory exists
-CONTAINER_DIR="${TARGETS_DIR}/${CONTAINER_NAME}"
-if [ ! -d "${CONTAINER_DIR}" ]; then
-    echo "Error: Container directory '${CONTAINER_NAME}' not found in ${TARGETS_DIR}"
-    echo "Please create directory: mkdir -p targets/${CONTAINER_NAME}"
+# Default CONTAINER_NAME to target name if not specified
+if [ -z "$CONTAINER_NAME" ]; then
+    CONTAINER_NAME="$TARGET"
+fi
+
+# Verify required variables
+if [ -z "$SSH_HOST" ]; then
+    echo "Error: SSH_HOST not set in ${TARGET_DIR}/.config"
     exit 1
 fi
 
-# Check if .env file exists in container directory
-if [ ! -f "${CONTAINER_DIR}/.env" ]; then
-    echo "Error: .env file not found in ${CONTAINER_DIR}/"
-    echo "Please create: targets/${CONTAINER_NAME}/.env"
+if [ -z "$CONTAINER_IMAGE" ]; then
+    echo "Error: CONTAINER_IMAGE not set in ${TARGET_DIR}/.config"
+    exit 1
+fi
+
+# Check if .env file exists in target directory
+if [ ! -f "${TARGET_DIR}/.env" ]; then
+    echo "Error: .env file not found in ${TARGET_DIR}/"
+    echo "Please create: targets/${TARGET}/.env"
     exit 1
 fi
 
@@ -126,8 +101,8 @@ echo "Target: $TARGET"
 echo "SSH Host: $SSH_HOST"
 echo "Container: $CONTAINER_NAME"
 echo "Image: $CONTAINER_IMAGE"
-echo "Registry Auth: $([ -n "$GHCR_USERNAME" ] && echo "Yes (${GHCR_USERNAME})" || echo "No (public image)")"
-echo "Local Dir: ${CONTAINER_DIR}"
+echo "Registry Auth: $([ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ] && echo "Yes (${GHCR_USERNAME})" || echo "No (public image)")"
+echo "Local Dir: ${TARGET_DIR}"
 echo "Remote Dir: ${REMOTE_BASE_DIR}"
 echo ""
 
@@ -151,28 +126,32 @@ else
 fi
 echo ""
 
-# Upload container directory to remote host
-echo "[3/9] Uploading container files..."
+# Upload target directory to remote host
+echo "[3/9] Uploading target files..."
 # Ensure the remote directory exists
 ssh ${SSH_HOST} "mkdir -p ${REMOTE_BASE_DIR}"
-# Upload all files from container directory (including hidden files)
+# Upload all files from target directory (including hidden files)
 shopt -s dotglob  # Enable matching hidden files
-scp -r "${CONTAINER_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/ 2>/dev/null || \
+scp -r "${TARGET_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/ 2>/dev/null || \
     echo "Warning: No files to upload (this is normal if directory is empty)"
 shopt -u dotglob  # Disable dotglob
-echo "✓ Container files uploaded to ${REMOTE_BASE_DIR}"
+echo "✓ Target files uploaded to ${REMOTE_BASE_DIR}"
 echo ""
 
 # Login to container registry (if credentials provided)
 if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
     echo "[4/9] Logging into GitHub Container Registry..."
-    ssh ${SSH_HOST} "echo '${GHCR_TOKEN}' | podman login ghcr.io -u ${GHCR_USERNAME} --password-stdin" >/dev/null 2>&1
+    echo "  Username: ${GHCR_USERNAME}"
+    if ! ssh ${SSH_HOST} "echo '${GHCR_TOKEN}' | podman login ghcr.io -u ${GHCR_USERNAME} --password-stdin" 2>&1; then
+        echo "Error: Failed to login to GitHub Container Registry"
+        exit 1
+    fi
     echo "✓ Logged in successfully"
     echo ""
 
     # Pull latest image with credentials
     echo "[5/9] Pulling latest container image (authenticated)..."
-    ssh ${SSH_HOST} "podman pull --creds ${GHCR_USERNAME}:${GHCR_TOKEN} ${CONTAINER_IMAGE}"
+    ssh ${SSH_HOST} "podman pull ${CONTAINER_IMAGE}"
     echo "✓ Latest image pulled"
     echo ""
 else
@@ -189,7 +168,7 @@ fi
 # Parse PORT_MAPPINGS and build port arguments
 PORT_ARGS=""
 if [ -n "$PORT_MAPPINGS" ]; then
-    echo "[6/8] Processing port mappings..."
+    echo "[6/9] Processing port mappings..."
     IFS=',' read -ra PORTS <<< "$PORT_MAPPINGS"
     for port_mapping in "${PORTS[@]}"; do
         # Trim whitespace
@@ -200,14 +179,14 @@ if [ -n "$PORT_MAPPINGS" ]; then
     done
     echo "✓ Port mappings configured"
 else
-    echo "[6/8] No port mappings specified (container will not expose ports)"
+    echo "[6/9] No port mappings specified"
 fi
 echo ""
 
 # Parse FILE_MAPPINGS and build volume mount arguments
 VOLUME_MOUNTS=""
 if [ -n "$FILE_MAPPINGS" ]; then
-    echo "[7/8] Processing file mappings..."
+    echo "[7/9] Processing file mappings..."
     IFS=',' read -ra MAPPINGS <<< "$FILE_MAPPINGS"
     for mapping in "${MAPPINGS[@]}"; do
         # Split mapping into local_file:container_path
@@ -225,12 +204,12 @@ if [ -n "$FILE_MAPPINGS" ]; then
     done
     echo "✓ File mappings configured"
 else
-    echo "[7/8] No file mappings specified"
+    echo "[7/9] No file mappings specified"
 fi
 echo ""
 
 # Check if container exists
-echo "[8/8] Checking for existing container..."
+echo "[8/9] Checking for existing container..."
 CONTAINER_EXISTS=$(ssh ${SSH_HOST} "podman ps -a --format '{{.Names}}' | grep -c '^${CONTAINER_NAME}$' || true")
 
 if [ "$CONTAINER_EXISTS" -gt 0 ]; then
@@ -290,7 +269,9 @@ echo ""
 echo "Target: ${TARGET}"
 echo "Container: ${CONTAINER_NAME}"
 echo "Image: ${CONTAINER_IMAGE}"
-echo "Port Mapping: ${HOST_PORT} (host) -> ${CONTAINER_PORT} (container)"
+if [ -n "$PORT_MAPPINGS" ]; then
+    echo "Ports: ${PORT_MAPPINGS}"
+fi
 echo ""
 echo "Useful commands:"
 echo "  View logs:       ssh ${SSH_HOST} 'podman logs -f ${CONTAINER_NAME}'"

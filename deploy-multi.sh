@@ -18,25 +18,26 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-# Check if targets.config exists
-if [ ! -f "${SCRIPT_DIR}/targets.config" ]; then
-    print_error "targets.config not found in ${SCRIPT_DIR}"
+# Check if targets directory exists
+if [ ! -d "${SCRIPT_DIR}/targets" ]; then
+    print_error "targets/ directory not found in ${SCRIPT_DIR}"
     echo ""
-    echo "Please create a targets.config file first:"
-    echo "  1. Copy the example configuration:"
-    echo "     cp targets.config.example targets.config"
-    echo ""
-    echo "  2. Edit targets.config with your actual values:"
-    echo "     - GHCR_USERNAME and GHCR_TOKEN for GitHub Container Registry"
-    echo "     - SSH_HOST for each target"
-    echo "     - Container names, ports, and paths"
+    echo "Please create target directories first:"
+    echo "  1. mkdir -p targets/myapp"
+    echo "  2. cp .config.example targets/myapp/.config"
+    echo "  3. cp env.example targets/myapp/.env"
+    echo "  4. Edit the config and env files"
     echo ""
     exit 1
 fi
 
-# Function to get all targets from config
+# Function to get all targets from targets directory
 get_targets() {
-    grep -E '^\[.*\]$' "${SCRIPT_DIR}/targets.config" | sed 's/\[\(.*\)\]/\1/'
+    for dir in "${SCRIPT_DIR}/targets"/*/ ; do
+        if [ -d "$dir" ]; then
+            basename "$dir"
+        fi
+    done
 }
 
 # Function to show usage
