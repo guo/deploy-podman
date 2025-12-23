@@ -4,184 +4,213 @@ This repository contains an automated deployment script for running containers a
 
 ## Overview
 
-The deployment script automates the process of:
+This repository provides two deployment methods:
+
+1. **Direct Deployment** (`deploy-podman-ssh.sh`) - Simple deployment with brief downtime during updates
+2. **Zero-Downtime Deployment** (`deploy-with-caddy.sh`) - Blue-green deployment via Caddy reverse proxy
+
+Both methods automate:
 - Installing Podman on remote hosts
 - Managing multiple targets (production, staging, demo, development)
 - Uploading target-specific configurations
 - Authenticating with GitHub Container Registry
-- Deploying or updating containers with zero downtime
+- Image tag/version management for deployments and rollbacks
 
 ## Prerequisites
 
-- SSH access to target hosts (configured in `targets.config`)
-- Sudo privileges on remote hosts
-- GitHub Container Registry credentials
-- SSH keys configured for passwordless authentication
+- SSH access to target hosts (with SSH keys configured for passwordless authentication)
+- Sudo privileges on remote hosts (for Podman installation)
+- GitHub Container Registry credentials (or use public images)
 
 ## Initial Setup
 
-1. **Create deployment configuration**
+1. **(Optional) Create global defaults**
    ```bash
-   # Copy the example configuration
-   cp targets.config.example targets.config
+   # Copy the example configuration for global defaults
+   cp .config.example .config
 
-   # Edit targets.config with your actual values:
-   # - GHCR_USERNAME and GHCR_TOKEN for GitHub Container Registry
-   # - SSH_HOST for each target
-   # - Container names, ports, and paths
-   vi targets.config
+   # Edit with common values shared across all targets
+   vi .config
    ```
 
-2. **Create container directories**
+2. **Create a target**
    ```bash
-   # Create targets directory
-   mkdir -p targets
-
-   # Create a directory for each container (use CONTAINER_NAME from config)
+   # Create target directory
    mkdir -p targets/myapp-prod
-   mkdir -p targets/myapp-staging
 
-   # Create .env file in each container directory
+   # Create target configuration
+   cp .config.example targets/myapp-prod/.config
+   vi targets/myapp-prod/.config
+
+   # Create environment file
    cp env.example targets/myapp-prod/.env
-   cp env.example targets/myapp-staging/.env
-
-   # Edit .env files with target-specific values
    vi targets/myapp-prod/.env
-   vi targets/myapp-staging/.env
 
-   # Add additional config files if needed
+   # (Optional) Add additional config files for volume mapping
    echo '{"key":"value"}' > targets/myapp-prod/config.json
    ```
 
-**Important**: The `targets.config` and `targets/` directory contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
+**Important**: The `.config` files and `targets/` directory contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
 
 
-## Multi-Server Configuration
+## Configuration System
 
 ### Directory Structure
 
-All container directories are organized under the `targets/` folder:
+Each target is a directory under `targets/` with its own configuration:
 
 ```
 deploy-podman/
-├── targets.config
+├── .config                      # Optional: global defaults
+├── .config.example              # Template for configuration
 ├── targets/
 │   ├── myapp-prod/
-│   │   ├── .env              # Required: environment variables
-│   │   ├── config.json       # Optional: additional config files
-│   │   └── data.txt          # Optional: data files
+│   │   ├── .config             # Required: deployment configuration
+│   │   ├── .env                # Required: environment variables
+│   │   ├── config.json         # Optional: additional files
+│   │   └── data.txt            # Optional: data files
 │   └── myapp-staging/
-│       ├── .env              # Required: environment variables
-│       └── config.json       # Optional: additional config files
-├── deploy-podman-ssh.sh
-└── deploy-multi.sh
+│       ├── .config             # Required: deployment configuration
+│       ├── .env                # Required: environment variables
+│       └── config.json         # Optional: additional files
+├── deploy-podman-ssh.sh        # Direct deployment (brief downtime)
+├── setup-caddy.sh              # One-time Caddy setup
+├── deploy-with-caddy.sh        # Zero-downtime deployment
+└── deploy-multi.sh             # Batch deployment
 ```
 
 Files are uploaded to remote host at `/var/app/${CONTAINER_NAME}/`
 
-### targets.config Structure
+### Configuration Files
 
-The `targets.config` file uses an INI-style format with sections for each target:
+#### `.config` (Bash Variables)
+
+Each target has a `.config` file with bash variables:
 
 ```bash
-# Common Configuration (shared across all targets)
-# These serve as defaults and can be overridden per-target
-CONTAINER_IMAGE="ghcr.io/xxx/xxxx"
-GHCR_USERNAME="user"
-GHCR_TOKEN="ghp_..."
-
-# Target 1 - Uses global credentials
-[prod1]
-SSH_HOST="PROD_HOST"
+# Container Configuration
+CONTAINER_IMAGE="ghcr.io/iotexproject/depinscan"
+GHCR_USERNAME="your-username"
+GHCR_TOKEN="ghp_your_token"
+SSH_HOST="your-ssh-host"
 CONTAINER_NAME="myapp-prod"
-PORT_MAPPINGS="80:3000,443:3443"  # Multiple port mappings
+
+# Direct Deployment Settings (deploy-podman-ssh.sh)
+PORT_MAPPINGS="80:3000"  # Only used by deploy-podman-ssh.sh
 FILE_MAPPINGS="config.json:/app/config.json"
 
-# Target 2 - Public image (no credentials)
-[staging]
-SSH_HOST="STAGING_HOST"
-CONTAINER_NAME="myapp-staging"
-PORT_MAPPINGS="80:80"
-CONTAINER_IMAGE="nginx:latest"  # Override with public image
-GHCR_USERNAME=""                # No credentials needed
-GHCR_TOKEN=""
-
-# Target 3 - Different private registry
-[dev]
-SSH_HOST="DEV_HOST"
-CONTAINER_NAME="myapp-dev"
-PORT_MAPPINGS="8080:3000"
-CONTAINER_IMAGE="ghcr.io/other-org/dev:latest"  # Override image
-GHCR_USERNAME="dev-user"                         # Override credentials
-GHCR_TOKEN="ghp_dev_token"
+# Caddy Deployment Settings (deploy-with-caddy.sh)
+DOMAIN="example.com"
+APP_PORT="3000"
+HEALTH_CHECK_PATH="/"
+HEALTH_CHECK_TIMEOUT="30"
 ```
 
-### Configuration Inheritance
+#### Global vs Target Config
 
-Each target can override global settings:
+- **Global** `.config` (optional) - Sets defaults for all targets
+- **Target** `targets/{target}/.config` (required) - Overrides global settings
+- Target config is loaded after global config via bash `source`
 
-- **CONTAINER_IMAGE** - Defaults to global value, can be overridden per-target
-- **GHCR_USERNAME** - Defaults to global value, can be overridden per-target
-- **GHCR_TOKEN** - Defaults to global value, can be overridden per-target
-- **Public images** - Set `GHCR_USERNAME=""` and `GHCR_TOKEN=""` to skip authentication
+#### `.env` File
 
-### Port Mappings
-
-`PORT_MAPPINGS` defines how ports are mapped from host to container:
-
-- **Format**: `"host_port:container_port,host_port2:container_port2"`
-- **Examples**:
-  - Single port: `PORT_MAPPINGS="80:3000"`
-  - Multiple ports: `PORT_MAPPINGS="80:3000,443:3443"`
-- **Optional**: Can be omitted if container doesn't expose ports
-
-### File Mappings
-
-`FILE_MAPPINGS` allows you to mount additional files from the container directory into the container:
-
-- **Format**: `"local_file:container_path,local_file2:container_path2"`
-- **Local paths**: Relative to `targets/${CONTAINER_NAME}/` directory
-- **Optional**: Omit if you only need environment variables
-
-## Quick Start
-
-### 1. Configure Targets
-
-Edit `targets.config` to set up your server configurations:
-- Update SSH hosts for each target
-- Configure container names and ports
-- Set GitHub Container Registry credentials
-
-### 2. Configure Environment Variables
-
-Edit the appropriate `.env.*` file for your target:
-
-### 3. Deploy to Specific Target
+Environment variables loaded into the container:
 
 ```bash
-# Deploy to deployment1
-./deploy-podman-ssh.sh deployment1
-
-# Deploy to deployment2
-./deploy-podman-ssh.sh deployment2
+DATABASE_URL=postgresql://...
+API_KEY=secret123
+PORT=3000
 ```
 
-### 4. List Available Targets
+### Configuration Variables
+
+#### Common Variables (Both Methods)
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `CONTAINER_IMAGE` | OCI image to deploy | `ghcr.io/org/app` |
+| `GHCR_USERNAME` | Registry username (empty for public) | `username` |
+| `GHCR_TOKEN` | Registry token (empty for public) | `ghp_...` |
+| `SSH_HOST` | Remote server hostname | `prod-server` |
+| `CONTAINER_NAME` | Container name (defaults to target) | `myapp-prod` |
+| `FILE_MAPPINGS` | Volume mounts | `config.json:/app/config.json` |
+
+#### Direct Deployment Only (`deploy-podman-ssh.sh`)
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `PORT_MAPPINGS` | Host to container port mapping | `80:3000,443:3443` |
+
+#### Caddy Deployment Only (`deploy-with-caddy.sh`)
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DOMAIN` | Domain name (informational) | `example.com` |
+| `APP_PORT` | Internal app port for Caddy proxy | `3000` |
+| `HEALTH_CHECK_PATH` | Health check URL path | `/` or `/health` |
+| `HEALTH_CHECK_TIMEOUT` | Startup timeout in seconds | `30` |
+
+**Important**: `PORT_MAPPINGS` is NOT used with Caddy deployment. Caddy uses `--network=host` and proxies to `localhost:${APP_PORT}`.
+
+## Deployment Methods
+
+### Method 1: Direct Deployment (Simple, Brief Downtime)
+
+Use `deploy-podman-ssh.sh` for simple deployments where brief downtime during updates is acceptable.
 
 ```bash
-./deploy-podman-ssh.sh --help
+# Deploy latest version
+./deploy-podman-ssh.sh myapp-prod
+
+# Deploy specific version/tag
+./deploy-podman-ssh.sh myapp-prod v1.2.3
+
+# Rollback to previous version
+./deploy-podman-ssh.sh myapp-prod v1.2.2
 ```
 
-Output:
+**Process**: Stops old container → Removes → Starts new container
+
+### Method 2: Zero-Downtime Deployment (Caddy + Blue-Green)
+
+Use `setup-caddy.sh` + `deploy-with-caddy.sh` for production deployments requiring zero downtime.
+
+#### Initial Setup (One-Time)
+
+```bash
+# Setup Caddy reverse proxy for the target
+./setup-caddy.sh myapp-prod
 ```
-Usage: ./deploy-podman-ssh.sh <target>
 
-Available targets:
-  - deployment1
-  - deployment2
+This creates a Caddy container that:
+- Listens on port 80 (HTTP only, SSL handled by Cloudflare/proxy)
+- Proxies to your app on `localhost:${APP_PORT}`
+- Has `auto_https` disabled (external proxy handles SSL)
 
-Example: ./deploy-podman-ssh.sh deployment1
-         ./deploy-podman-ssh.sh deployment2
+#### Deploy Updates
+
+```bash
+# Deploy latest version with zero downtime
+./deploy-with-caddy.sh myapp-prod
+
+# Deploy specific version
+./deploy-with-caddy.sh myapp-prod v1.2.3
+
+# Rollback with zero downtime
+./deploy-with-caddy.sh myapp-prod v1.2.2
+```
+
+**Process**:
+1. Starts new container on alternate port (blue: 3001)
+2. Runs health check with timeout
+3. Switches Caddy traffic to new container
+4. Stops old container
+5. Recreates container on standard port (green: 3000)
+6. Switches traffic back and removes blue
+
+**Architecture**:
+```
+Browser → HTTPS (Cloudflare) → HTTP (Caddy :80) → HTTP (App :3000)
 ```
 
 ## Deploy to Multiple Targets
@@ -242,40 +271,47 @@ Check these files if a deployment fails.
 
 ## How It Works
 
-The deployment script performs these steps for the selected target:
+### Direct Deployment (`deploy-podman-ssh.sh`)
 
-1. **Parses configuration** - Reads targets.config for the specified target
-2. **Validates directory** - Checks that `targets/${CONTAINER_NAME}/` directory and `.env` file exist
-3. **Verifies SSH** - Tests connection to the target server
+1. **Loads configuration** - Sources global `.config` (if exists), then target `.config`
+2. **Validates** - Checks target directory, `.config`, and `.env` file exist
+3. **Verifies SSH** - Tests connection to target server
 4. **Checks Podman** - Installs if not present
-5. **Uploads files** - Copies entire container directory to `/var/app/${CONTAINER_NAME}/`
-6. **Processes port mappings** - Parses `PORT_MAPPINGS` and builds port arguments
-7. **Processes file mappings** - Parses `FILE_MAPPINGS` and builds volume mount arguments
-8. **Authenticates** - Logs into container registry (skipped for public images)
-9. **Pulls latest image** - Downloads the newest container version (with or without credentials)
-10. **Updates container**:
-   - If exists: Stops, removes, and recreates with latest image
-   - If new: Creates fresh deployment
+5. **Uploads files** - Copies entire target directory to `/var/app/${CONTAINER_NAME}/`
+6. **Authenticates** - Logs into container registry (skipped for public images)
+7. **Pulls image** - Downloads specified image:tag (defaults to `:latest`)
+8. **Processes mappings**:
+   - Port mappings: Builds `-p host:container` arguments
+   - File mappings: Builds `-v` volume mount arguments
+9. **Updates container**:
+   - Stops existing container (if exists)
+   - Removes old container
+   - Creates new container with `--restart=always`
    - Uses `--env-file` for environment variables
-   - Maps ports via `-p` flags
-   - Mounts additional files via `-v` flags
-11. **Verifies** - Confirms container is running and shows logs
+10. **Verifies** - Confirms container is running
 
-## Update Existing Deployment
+### Zero-Downtime Deployment (`deploy-with-caddy.sh`)
 
-Simply run the deployment script again to update to the latest image:
+**Prerequisites**: Run `./setup-caddy.sh <target>` once to create Caddy container
 
-```bash
-# Update deployment1
-./deploy-podman-ssh.sh deployment1
+1. **Loads configuration** - Sources global `.config` (if exists), then target `.config`
+2. **Validates** - Checks Caddy container is running
+3. **Uploads files** - Copies target directory to remote server
+4. **Authenticates** - Logs into container registry (if needed)
+5. **Pulls image** - Downloads specified image:tag
+6. **Blue container**:
+   - Starts new container on port 3001 (blue)
+   - Runs health check with timeout
+   - Aborts and rolls back if health check fails
+7. **Traffic switch**:
+   - Updates Caddyfile to proxy to blue (3001)
+   - Reloads Caddy configuration
+   - Stops old container
+8. **Green container**:
+   - Recreates container on port 3000 (green) with `--restart=always`
+   - Updates Caddyfile to proxy to green (3000)
+   - Reloads Caddy configuration
+   - Removes blue container
+9. **Verifies** - Confirms final container is running
 
-# Update deployment2
-./deploy-podman-ssh.sh deployment2
-```
-
-The script automatically:
-- Pulls the latest image
-- Stops the existing container gracefully
-- Removes the old container
-- Starts a new container with the latest image
-- Verifies the deployment
+**Result**: Zero downtime - traffic is always served during entire process
