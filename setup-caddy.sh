@@ -104,30 +104,14 @@ echo ""
 
 # Generate Caddyfile
 echo "[4/6] Generating Caddyfile..."
-if [ -n "$DOMAIN" ]; then
-    # With domain - automatic HTTPS
-    CADDYFILE_CONTENT="${DOMAIN} {
-    reverse_proxy localhost:${APP_PORT}
-    
-    # Optional: Enable compression
-    encode gzip
-    
-    # Optional: Add security headers
-    header {
-        # Enable HSTS
-        Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\"
-        # Prevent content type sniffing
-        X-Content-Type-Options \"nosniff\"
-        # Enable XSS protection
-        X-Frame-Options \"SAMEORIGIN\"
-    }
-}"
-else
-    # Without domain - HTTP only on port 80
-    CADDYFILE_CONTENT=":80 {
+# Always disable auto HTTPS - SSL should be handled by reverse proxy (Cloudflare, etc)
+CADDYFILE_CONTENT="{
+    auto_https off
+}
+
+:80 {
     reverse_proxy localhost:${APP_PORT}
 }"
-fi
 
 # Upload Caddyfile
 ssh ${SSH_HOST} "cat > ${CADDYFILE_PATH}" <<< "$CADDYFILE_CONTENT"
@@ -183,12 +167,8 @@ echo "========================================="
 echo ""
 echo "Caddy Container: ${CADDY_CONTAINER}"
 echo "Configuration: ${CADDYFILE_PATH}"
-if [ -n "$DOMAIN" ]; then
-    echo "Domain: ${DOMAIN}"
-    echo "HTTPS: Enabled (automatic via Let's Encrypt)"
-else
-    echo "Domain: Not configured (HTTP only on port 80)"
-fi
+echo "Domain: ${DOMAIN:-<not configured>}"
+echo "Protocol: HTTP only on port 80 (auto_https disabled)"
 echo "Proxying to: localhost:${APP_PORT}"
 echo ""
 echo "Next steps:"
