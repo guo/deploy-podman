@@ -22,9 +22,13 @@ list_targets() {
 
 # Check arguments
 if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
-    echo "Usage: $0 <target>"
+    echo "Usage: $0 <target> [image-tag]"
     echo ""
     echo "Deploy a containerized application to a remote server via SSH."
+    echo ""
+    echo "Arguments:"
+    echo "  target      Target name (e.g., myapp)"
+    echo "  image-tag   Optional image tag (default: latest)"
     echo ""
     list_targets
     echo ""
@@ -35,11 +39,15 @@ if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
     echo "  4. cp env.example targets/myapp/.env       # Create environment file"
     echo "  5. Edit targets/myapp/.config and .env with your settings"
     echo ""
-    echo "Example: $0 myapp"
+    echo "Examples:"
+    echo "  $0 myapp              # Deploy latest"
+    echo "  $0 myapp v1.2.3       # Deploy specific version"
+    echo "  $0 myapp sha-abc123   # Deploy specific commit"
     exit 0
 fi
 
 TARGET="$1"
+IMAGE_TAG="${2:-latest}"
 TARGET_DIR="${SCRIPT_DIR}/targets/${TARGET}"
 
 # Verify target directory exists
@@ -90,6 +98,10 @@ if [ ! -f "${TARGET_DIR}/.env" ]; then
     exit 1
 fi
 
+# Build full image name with tag (strip existing tag if present)
+BASE_IMAGE="${CONTAINER_IMAGE%:*}"
+FULL_IMAGE="${BASE_IMAGE}:${IMAGE_TAG}"
+
 # Set remote paths
 REMOTE_BASE_DIR="/var/app/${CONTAINER_NAME}"
 REMOTE_ENV_FILE="${REMOTE_BASE_DIR}/.env"
@@ -100,7 +112,7 @@ echo "========================================="
 echo "Target: $TARGET"
 echo "SSH Host: $SSH_HOST"
 echo "Container: $CONTAINER_NAME"
-echo "Image: $CONTAINER_IMAGE"
+echo "Image: $FULL_IMAGE"
 echo "Registry Auth: $([ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ] && echo "Yes (${GHCR_USERNAME})" || echo "No (public image)")"
 echo "Local Dir: ${TARGET_DIR}"
 echo "Remote Dir: ${REMOTE_BASE_DIR}"
@@ -150,18 +162,18 @@ if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
     echo ""
 
     # Pull latest image with credentials
-    echo "[5/9] Pulling latest container image (authenticated)..."
-    ssh ${SSH_HOST} "podman pull ${CONTAINER_IMAGE}"
-    echo "✓ Latest image pulled"
+    echo "[5/9] Pulling container image (authenticated)..."
+    ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+    echo "✓ Image pulled"
     echo ""
 else
     echo "[4/9] Skipping container registry login (no credentials provided)"
     echo ""
 
     # Pull latest image without credentials (public image)
-    echo "[5/9] Pulling latest container image (public)..."
-    ssh ${SSH_HOST} "podman pull ${CONTAINER_IMAGE}"
-    echo "✓ Latest image pulled"
+    echo "[5/9] Pulling container image (public)..."
+    ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+    echo "✓ Image pulled"
     echo ""
 fi
 
@@ -224,15 +236,15 @@ if [ "$CONTAINER_EXISTS" -gt 0 ]; then
     ssh ${SSH_HOST} "podman rm ${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
     # Start new container with latest image
-    echo "  → Starting new container with latest image..."
-    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
+    echo "  → Starting new container with image..."
+    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${FULL_IMAGE}"
 
-    echo "✓ Container updated to latest version"
+    echo "✓ Container updated to new version"
 else
     echo "Container '${CONTAINER_NAME}' not found. Creating new deployment..."
 
     # Start new container
-    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${CONTAINER_IMAGE}"
+    ssh ${SSH_HOST} "podman run -d --restart=always --env-file ${REMOTE_ENV_FILE}${PORT_ARGS}${VOLUME_MOUNTS} --name ${CONTAINER_NAME} ${FULL_IMAGE}"
 
     echo "✓ Container deployed successfully"
 fi
@@ -268,7 +280,7 @@ echo "========================================="
 echo ""
 echo "Target: ${TARGET}"
 echo "Container: ${CONTAINER_NAME}"
-echo "Image: ${CONTAINER_IMAGE}"
+echo "Image: ${FULL_IMAGE}"
 if [ -n "$PORT_MAPPINGS" ]; then
     echo "Ports: ${PORT_MAPPINGS}"
 fi

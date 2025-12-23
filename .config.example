@@ -22,3 +22,14 @@ PORT_MAPPINGS=""
 # Paths are relative to target directory
 # Example: "config.json:/app/config.json,data.db:/app/data/data.db"
 FILE_MAPPINGS=""
+
+# Caddy Reverse Proxy Configuration (for deploy-with-caddy.sh)
+# Domain name for Caddy automatic HTTPS
+DOMAIN=""
+
+# Application internal port (Caddy proxies to this)
+APP_PORT="3000"
+
+# Health check configuration
+HEALTH_CHECK_PATH="/"
+HEALTH_CHECK_TIMEOUT="30"
