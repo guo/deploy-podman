@@ -1,0 +1,57 @@
+# Example Podman Compose configuration for multi-container deployment
+# Copy this to targets/{target}/compose.yml and customize
+
+services:
+  # Main application service
+  app:
+    image: ghcr.io/your-org/your-app:${IMAGE_TAG:-latest}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://db:5432/myapp
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env  # Additional secrets from .env
+    volumes:
+      - ./config/app.conf:/app/config/app.conf:ro
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  # PostgreSQL database
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=appuser
+      # POSTGRES_PASSWORD should be in .env file
+    env_file:
+      - .env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d myapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+# Named volumes for persistent data
+volumes:
+  db_data:
+    driver: local
+
+# Note: Services communicate via service names (e.g., app can reach db at hostname "db")
+# Note: IMAGE_TAG variable is passed from deploy-podman-ssh.sh command line

@@ -60,6 +60,19 @@ if [ -z "$CONTAINER_NAME" ]; then
     CONTAINER_NAME="$TARGET"
 fi
 
+# Check if this is a compose target - not supported for zero-downtime deployment
+if [ -f "${TARGET_DIR}/compose.yml" ] || [ -f "${TARGET_DIR}/docker-compose.yml" ]; then
+    echo "❌ Error: Zero-downtime deployment not supported for compose targets"
+    echo "Compose target detected in: ${TARGET_DIR}"
+    echo ""
+    echo "Options:"
+    echo "  1. Use deploy-podman-ssh.sh for compose deployments (brief downtime)"
+    echo "  2. Convert to single-container deployment for zero-downtime support"
+    echo ""
+    echo "Zero-downtime compose deployment is planned for future release."
+    exit 1
+fi
+
 # Verify required variables
 if [ -z "$SSH_HOST" ]; then
     echo "Error: SSH_HOST not set in ${TARGET_DIR}/.config"

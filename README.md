@@ -1,16 +1,30 @@
-# Podman Multi Deployment Script
+# Container Deployment Automation (Docker + Podman)
 
-This repository contains an automated deployment script for running containers across multiple servers/environments using Podman.
+This repository contains automated deployment scripts for running containers across multiple servers/environments. Supports both **Docker** and **Podman** with automatic engine selection based on deployment type.
 
 ## Overview
 
-This repository provides two deployment methods:
+This repository provides deployment automation with **dual container engine support** (Docker + Podman):
 
-1. **Direct Deployment** (`deploy-podman-ssh.sh`) - Simple deployment with brief downtime during updates
-2. **Zero-Downtime Deployment** (`deploy-with-caddy.sh`) - Blue-green deployment via Caddy reverse proxy
+### Deployment Methods
 
-Both methods automate:
-- Installing Podman on remote hosts
+1. **Direct Deployment** (`deploy-ssh.sh` or `deploy-podman-ssh.sh`) - Automatic engine selection
+   - **Single-container**: Podman (default) or Docker (configurable via `ENGINE` in `.config`)
+   - **Multi-container (compose)**: Docker (automatic)
+   - Brief downtime during updates
+
+2. **Zero-Downtime Deployment** (`deploy-with-caddy.sh`) - Blue-green deployment via Caddy
+   - Single-container only (Podman or Docker)
+   - Production-ready with health checks
+
+### Container Engine Selection
+
+- **Docker**: For both single-container and multi-container (compose) deployments
+- **Podman**: For single-container deployments only (rootless, more secure)
+- **Auto-detection**: Compose files automatically use Docker; single-container defaults to Podman
+
+All methods automate:
+- Installing container engine on remote hosts (Docker or Podman)
 - Managing multiple targets (production, staging, demo, development)
 - Uploading target-specific configurations
 - Authenticating with GitHub Container Registry
@@ -213,6 +227,65 @@ This creates a Caddy container that:
 Browser → HTTPS (Cloudflare) → HTTP (Caddy :80) → HTTP (App :3000)
 ```
 
+### Method 3: Multi-Container Deployment (Compose)
+
+Deploy complete application stacks with multiple services (app + database + cache) using Docker Compose.
+
+#### Requirements
+
+- Docker (auto-installed during deployment)
+- Docker Compose v2 (auto-installed during deployment)
+- Brief downtime during deployment (zero-downtime not supported yet)
+
+#### Under the Hood
+
+This deployment method uses **Docker + Docker Compose v2**:
+- Docker is auto-installed if not present
+- Docker Compose v2 is auto-installed if not present
+- Simple and reliable (official Docker tooling)
+- 100% compatible with standard docker-compose.yml files
+
+**Note:** Compose deployments automatically use Docker (Podman doesn't support compose in this implementation). The `ENGINE` setting in `.config` is ignored for compose targets.
+
+#### Setup
+
+```bash
+# Create target with compose file
+mkdir -p targets/myapp-prod
+cp compose.example.yml targets/myapp-prod/compose.yml
+vi targets/myapp-prod/compose.yml
+
+# Create simplified config (most settings in compose.yml)
+echo 'SSH_HOST="user@server.com"' > targets/myapp-prod/.config
+
+# Create environment file
+cp env.example targets/myapp-prod/.env
+vi targets/myapp-prod/.env
+```
+
+#### Deployment
+
+```bash
+# Deploy with latest tag (auto-detects compose)
+./deploy-podman-ssh.sh myapp-prod
+
+# Deploy specific version
+./deploy-podman-ssh.sh myapp-prod v1.2.3
+
+# Deploy to multiple compose targets
+./deploy-multi.sh --all
+```
+
+**Auto-detection**: If `compose.yml` or `docker-compose.yml` exists in the target directory, the deployment script automatically uses `podman compose` instead of single-container deployment.
+
+**Configuration**: For compose targets, the `.config` file is simplified - only `SSH_HOST` is required. All container settings (images, ports, volumes, networks) are defined in the compose file.
+
+**Limitations**:
+- ⚠️ Zero-downtime deployment (`deploy-with-caddy.sh`) does not support compose targets yet
+- Use `deploy-podman-ssh.sh` for compose deployments (brief downtime during update)
+
+See [compose.example.yml](compose.example.yml) for a complete example and [CLAUDE.md](CLAUDE.md#compose-deployments-multi-container) for detailed documentation.
+
 ## Deploy to Multiple Targets
 
 Use the `deploy-multi.sh` script to deploy to multiple targets at once.
@@ -273,6 +346,10 @@ Check these files if a deployment fails.
 
 ### Direct Deployment (`deploy-podman-ssh.sh`)
 
+**Auto-detects** deployment mode: single-container or compose
+
+#### Single-Container Mode
+
 1. **Loads configuration** - Sources global `.config` (if exists), then target `.config`
 2. **Validates** - Checks target directory, `.config`, and `.env` file exist
 3. **Verifies SSH** - Tests connection to target server
@@ -289,6 +366,21 @@ Check these files if a deployment fails.
    - Creates new container with `--restart=always`
    - Uses `--env-file` for environment variables
 10. **Verifies** - Confirms container is running
+
+#### Compose Mode (auto-detected if compose.yml exists)
+
+1. **Loads configuration** - Sources global `.config` (if exists), then target `.config`
+2. **Installs Docker Compose v2** - Downloads and installs if not present
+3. **Detects Podman mode** - Checks if rootless or rootful Podman
+4. **Enables Podman socket** - Starts socket service for Docker Compose compatibility
+5. **Verifies SSH** - Tests connection to target server
+6. **Uploads files** - Copies entire target directory (including compose.yml) to `/var/app/${TARGET}/`
+7. **Authenticates** - Logs into container registry (if credentials provided)
+8. **Deploys stack**:
+   - Exports `IMAGE_TAG` environment variable
+   - Runs `DOCKER_HOST=unix:///run/podman/podman.sock docker-compose down`
+   - Runs `DOCKER_HOST=unix:///run/podman/podman.sock docker-compose up -d`
+9. **Verifies** - Confirms all services are running
 
 ### Zero-Downtime Deployment (`deploy-with-caddy.sh`)
 

@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Podman deployment automation tool for managing containerized applications across multiple remote servers via SSH. It supports multiple deployment targets (production, staging, demo, etc.) with target-specific configurations.
+This is a deployment automation tool for managing containerized applications across multiple remote servers via SSH. It supports both **Docker** and **Podman** as container engines, with automatic engine selection based on deployment type. Supports multiple deployment targets (production, staging, demo, etc.) with target-specific configurations.
+
+### Container Engine Support
+
+- **Docker**: For both single-container and multi-container (compose) deployments
+- **Podman**: For single-container deployments only (rootless, more secure)
+- **Auto-detection**: Compose files automatically use Docker; single-container defaults to Podman (configurable)
 
 ## Key Architecture
 
@@ -34,19 +40,21 @@ The deployment system uses a simple directory-based structure:
 
 3. **Configuration files**
    - `.config` - Deployment settings (bash variables)
-     - `CONTAINER_IMAGE` - Docker/OCI image to deploy (without tag, specified at runtime)
+     - `ENGINE` - Container engine: `"podman"` or `"docker"` (default: podman for single-container, docker for compose)
+     - `CONTAINER_IMAGE` - Docker/OCI image to deploy (without tag, specified at runtime) - **Required for single-container only**
      - `GHCR_USERNAME` / `GHCR_TOKEN` - Registry credentials (empty for public images)
-     - `SSH_HOST` - Remote server hostname
+     - `SSH_HOST` - Remote server hostname - **Always required**
      - `CONTAINER_NAME` - Container name (defaults to target directory name)
-     - `PORT_MAPPINGS` - Port mappings for direct deployment (format: `"80:3000,443:3001"`)
-     - `FILE_MAPPINGS` - Volume mounts (format: `"file:path,file2:path2"`)
+     - `PORT_MAPPINGS` - Port mappings for direct deployment (format: `"80:3000,443:3001"`) - **Single-container only**
+     - `FILE_MAPPINGS` - Volume mounts (format: `"file:path,file2:path2"`) - **Single-container only**
      - Caddy-specific (for deploy-with-caddy.sh):
        - `DOMAIN` - Domain name for automatic HTTPS
        - `APP_PORT` - Internal application port (default: 3000)
        - `HEALTH_CHECK_PATH` - Health check endpoint (default: "/")
        - `HEALTH_CHECK_TIMEOUT` - Health check timeout in seconds (default: 30)
-   - `.env` - Container environment variables (loaded with `--env-file`)
-   - Additional files - Any files referenced in FILE_MAPPINGS
+   - `.env` - Container environment variables (loaded with `--env-file` or `env_file` in compose)
+   - Additional files - Any files referenced in FILE_MAPPINGS or compose volumes
+   - `docker-compose.yml` or `compose.yml` - **Optional**: Triggers Docker compose deployment (ENGINE setting ignored)
 
 4. **Configuration loading**
    - Global `.config` is sourced first (if exists)
@@ -55,19 +63,42 @@ The deployment system uses a simple directory-based structure:
 
 ### Script Architecture
 
-- **deploy-podman-ssh.sh** - Direct deployment script (simple, with downtime)
-  - Supports image tag specification: `./deploy-podman-ssh.sh <target> [tag]`
-  - Loads global `.config` (optional defaults)
-  - Loads target `.config` from `targets/{target}/.config` (overrides global)
-  - Validates required variables (SSH_HOST, CONTAINER_IMAGE)
-  - Validates target directory structure (`.config` and `.env` files)
-  - Uploads entire target directory to remote `/var/app/${CONTAINER_NAME}/`
-  - Parses PORT_MAPPINGS (host:container format, comma-separated for multiple ports)
-  - Parses FILE_MAPPINGS to build volume mount arguments
-  - Executes 9-step deployment process: SSH verification, Podman installation, file upload, GHCR authentication, image pull, port/file mapping processing, container update/creation, verification
-  - Handles both new deployments and updates to existing containers
-  - Container name defaults to target directory name if not specified in config
-  - **Note:** Has brief downtime during container restart
+- **deploy-ssh.sh** - Main unified deployment script with auto-detection
+  - Auto-detects deployment mode (single vs compose) and engine (Docker vs Podman)
+  - Delegates to modular implementations in `lib/` directory
+
+- **deploy-podman-ssh.sh** - Backward compatibility wrapper (calls deploy-ssh.sh)
+
+- **lib/deploy-podman.sh** - Podman single-container deployment module
+
+- **lib/deploy-docker.sh** - Docker deployment module (single-container + compose)
+  - Contains two functions: `deploy_docker_single()` and `deploy_docker_compose()`
+  - Handles Docker installation, registry authentication, and deployment
+  - **Single-container**: Similar to Podman but uses Docker commands
+  - **Compose**: Installs Docker Compose v2, deploys multi-container stacks
+
+### Deployment Flow
+
+**Single-Container (Podman or Docker):**
+1. Validates configuration and SSH connection
+2. Uploads target files to remote server
+3. Installs container engine if needed
+4. Authenticates with registry (if credentials provided)
+5. Pulls image
+6. Processes port and file mappings
+7. Deploys/updates container
+8. Verifies deployment
+
+**Multi-Container (Docker Compose):**
+1. Validates configuration and SSH connection
+2. Uploads target files including compose.yml
+3. Installs Docker and Docker Compose v2 if needed
+4. Authenticates with registry (if credentials provided)
+5. Runs `docker compose down` (stops existing)
+6. Runs `docker compose up -d` (starts new stack)
+7. Verifies all services running
+
+**Note:** All deployment methods have brief downtime during updates
 
 - **setup-caddy.sh** - One-time Caddy reverse proxy setup per target
   - Creates Caddy container per target: `caddy-{target}`
@@ -78,6 +109,7 @@ The deployment system uses a simple directory-based structure:
   - **Usage:** `./setup-caddy.sh <target>` (run once per target)
 
 - **deploy-with-caddy.sh** - Zero-downtime deployment via Caddy (production-ready)
+  - **Single-container only**: Does not support compose targets (will error with helpful message)
   - Supports image tag specification: `./deploy-with-caddy.sh <target> [tag]`
   - Requires Caddy to be set up first via `setup-caddy.sh`
   - Blue-green deployment strategy:
@@ -122,6 +154,103 @@ The deployment system uses a simple directory-based structure:
 - **Staging:** Use specific version tags (e.g., `v1.2.3-rc1`)
 - **Production:** Always use specific version tags for reproducibility
 - **Rollback:** Deploy previous version tag (e.g., `v1.2.2`)
+
+### Engine Selection Logic
+
+The deployment script automatically selects the appropriate container engine:
+
+| Target Has | .config ENGINE | Actual Engine Used | Deployment Type |
+|------------|---------------|-------------------|-----------------|
+| compose.yml | podman | **docker** | Multi-container (forced) |
+| compose.yml | docker | docker | Multi-container |
+| compose.yml | (not set) | **docker** | Multi-container (forced) |
+| (no compose) | podman | podman | Single-container |
+| (no compose) | docker | docker | Single-container |
+| (no compose) | (not set) | **podman** | Single-container (default) |
+
+**Key Rules:**
+- Compose files ALWAYS use Docker (Podman doesn't support compose in this implementation)
+- Single-container defaults to Podman (more secure, rootless)
+- Can override with `ENGINE="docker"` in `.config` for single-container
+
+### Compose Deployments (Multi-Container)
+
+**Auto-detection**: If `compose.yml` or `docker-compose.yml` exists in target directory, deployment automatically uses Docker with Docker Compose v2.
+
+**Requirements**:
+- Docker (auto-installed if not present)
+- Docker Compose v2 (auto-installed if not present)
+
+**How it works**:
+- Uses **Docker + Docker Compose v2** (official, Go-based implementation)
+- Simple and reliable (no socket configuration needed)
+- 100% compatible with standard docker-compose.yml files
+
+**Target structure**:
+```
+targets/myapp-prod/
+├── .config              # SSH_HOST and optional IMAGE_TAG
+├── .env                 # Environment variables
+├── compose.yml          # Compose file (triggers compose mode)
+└── config/              # Additional files for volumes
+    └── app.conf
+```
+
+**Example .config** (simplified for compose):
+```bash
+SSH_HOST="user@server.com"
+IMAGE_TAG="latest"       # Optional - passed to compose as ${IMAGE_TAG}
+GHCR_USERNAME="user"     # Optional - for private registries
+GHCR_TOKEN="ghp_xxx"
+
+# NOT NEEDED for compose (defined in compose.yml):
+# CONTAINER_IMAGE, CONTAINER_NAME, PORT_MAPPINGS, FILE_MAPPINGS
+```
+
+**Example compose.yml**:
+```yaml
+services:
+  app:
+    image: ghcr.io/user/myapp:${IMAGE_TAG:-latest}
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./config/app.conf:/app/config/app.conf:ro
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  db_data:
+```
+
+**Deployment**:
+```bash
+# Deploy with latest tag
+./deploy-podman-ssh.sh myapp-prod
+
+# Deploy specific version
+./deploy-podman-ssh.sh myapp-prod v1.2.3
+
+# Multi-target deploy (supports both single and compose targets)
+./deploy-multi.sh --all
+```
+
+**Limitations**:
+- ⚠️ **No zero-downtime support**: `deploy-with-caddy.sh` does not support compose targets yet. Use `deploy-podman-ssh.sh` (brief downtime during redeployment).
+- For multiple registries, pre-authenticate on remote server using `podman login`
+
+**Future**: Zero-downtime compose deployment planned for future release.
 
 ## Common Commands
 
