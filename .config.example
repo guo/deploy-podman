@@ -1,15 +1,28 @@
-# Podman Deployment Configuration
+# Container Deployment Configuration
 # This is a template - copy to .config (global) or targets/{target}/.config (per-target)
 
-# Container image to deploy
-CONTAINER_IMAGE="ghcr.io/your-org/your-image:latest"
+# ============================================================================
+# ENGINE SELECTION
+# ============================================================================
+# Container engine: "podman" or "docker"
+# - For single-container: defaults to "podman" (more secure, rootless)
+# - For compose: automatically uses "docker" (ENGINE setting is ignored)
+#
+# Examples:
+#   ENGINE="podman"  # Use Podman for single-container (default)
+#   ENGINE="docker"  # Use Docker for single-container
+#
+# Note: If docker-compose.yml exists in target, Docker is used automatically
+ENGINE="podman"
 
-# GitHub Container Registry credentials (leave empty for public images)
-GHCR_USERNAME=""
-GHCR_TOKEN=""
+# ============================================================================
+# SINGLE-CONTAINER CONFIGURATION
+# (Required for single-container deployments, ignored for compose)
+# ============================================================================
 
-# SSH host to deploy to
-SSH_HOST="your-hostname"
+# Container image to deploy (without tag - tag specified at runtime)
+# Example: "ghcr.io/your-org/your-image"
+CONTAINER_IMAGE="ghcr.io/your-org/your-image"
 
 # Container name (defaults to target directory name if not specified)
 CONTAINER_NAME=""
@@ -23,8 +36,32 @@ PORT_MAPPINGS=""
 # Example: "config.json:/app/config.json,data.db:/app/data/data.db"
 FILE_MAPPINGS=""
 
-# Caddy Reverse Proxy Configuration (for deploy-with-caddy.sh)
+# ============================================================================
+# REGISTRY AUTHENTICATION
+# (Optional for both single-container and compose)
+# ============================================================================
+
+# GitHub Container Registry credentials (leave empty for public images)
+# For private images, create a Personal Access Token with package:read permission
+GHCR_USERNAME=""
+GHCR_TOKEN=""
+
+# ============================================================================
+# SSH CONNECTION
+# (Required for all deployment types)
+# ============================================================================
+
+# SSH host to deploy to (can be hostname from ~/.ssh/config or user@host)
+# Example: "prod-server" or "deploy@example.com"
+SSH_HOST="your-hostname"
+
+# ============================================================================
+# ZERO-DOWNTIME DEPLOYMENT (deploy-with-caddy.sh)
+# (Only for single-container deployments)
+# ============================================================================
+
 # Domain name for Caddy automatic HTTPS
+# Example: "example.com" or "api.example.com"
 DOMAIN=""
 
 # Application internal port (Caddy proxies to this)
@@ -33,3 +70,24 @@ APP_PORT="3000"
 # Health check configuration
 HEALTH_CHECK_PATH="/"
 HEALTH_CHECK_TIMEOUT="30"
+
+# ============================================================================
+# DEPLOYMENT MODE SUMMARY
+# ============================================================================
+#
+# SINGLE-CONTAINER (Podman or Docker):
+#   Required: SSH_HOST, CONTAINER_IMAGE, ENGINE (optional, defaults to podman)
+#   Optional: GHCR_USERNAME/TOKEN, CONTAINER_NAME, PORT_MAPPINGS, FILE_MAPPINGS
+#   Files: .config, .env, (optional: additional files referenced in FILE_MAPPINGS)
+#
+# MULTI-CONTAINER (Docker Compose):
+#   Required: SSH_HOST
+#   Optional: GHCR_USERNAME/TOKEN (for private images)
+#   Ignored: ENGINE (always uses docker), CONTAINER_IMAGE, PORT_MAPPINGS, FILE_MAPPINGS
+#   Files: .config, .env, docker-compose.yml (or compose.yml)
+#
+# ZERO-DOWNTIME (Caddy + Blue-Green):
+#   Same as single-container, plus: DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT
+#   Note: Only supports single-container deployments
+#
+# ============================================================================
