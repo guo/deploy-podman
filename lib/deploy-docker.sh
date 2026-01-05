@@ -207,10 +207,12 @@ deploy_docker_compose() {
 
     # Deploy with docker compose
     echo "[4/5] Deploying with Docker Compose..."
-    ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && \
-        export IMAGE_TAG='${IMAGE_TAG}' && \
-        docker compose -f ${COMPOSE_FILE} down 2>/dev/null || true && \
-        docker compose -f ${COMPOSE_FILE} up -d"
+    echo "  → Pulling latest images..."
+    ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && export IMAGE_TAG='${IMAGE_TAG}' && docker compose -f ${COMPOSE_FILE} pull"
+    echo "  → Stopping existing services..."
+    ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && export IMAGE_TAG='${IMAGE_TAG}' && docker compose -f ${COMPOSE_FILE} down 2>/dev/null || true"
+    echo "  → Starting services with latest images..."
+    ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && export IMAGE_TAG='${IMAGE_TAG}' && docker compose -f ${COMPOSE_FILE} up -d"
     echo "✓ Compose deployment complete"
     echo ""
 
