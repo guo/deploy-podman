@@ -138,6 +138,10 @@ deploy_docker_single() {
     echo "Target: ${TARGET}"
     echo "Container: ${CONTAINER_NAME}"
     echo "Image: ${FULL_IMAGE}"
+    IMAGE_DIGEST=$(ssh ${SSH_HOST} "docker inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
+    if [ -n "$IMAGE_DIGEST" ]; then
+        echo "Image Digest: ${IMAGE_DIGEST}"
+    fi
     if [ -n "$PORT_MAPPINGS" ]; then
         echo "Ports: ${PORT_MAPPINGS}"
     fi
@@ -229,6 +233,18 @@ deploy_docker_compose() {
     echo "Target: ${TARGET}"
     echo "Compose File: ${COMPOSE_FILE}"
     echo "Image Tag: ${IMAGE_TAG}"
+    echo ""
+    echo "Deployed Image Digests:"
+    ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && docker compose -f ${COMPOSE_FILE} ps --format json" | while read -r line; do
+        container_name=$(echo "$line" | grep -o '"Name":"[^"]*' | cut -d'"' -f4)
+        if [ -n "$container_name" ]; then
+            digest=$(ssh ${SSH_HOST} "docker inspect $container_name --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
+            image=$(ssh ${SSH_HOST} "docker inspect $container_name --format='{{index .Config.Image}}'" 2>/dev/null)
+            if [ -n "$digest" ] && [ -n "$image" ]; then
+                echo "  $container_name: $image ($digest)"
+            fi
+        fi
+    done
     echo ""
     echo "Useful commands:"
     echo "  View services:   ssh ${SSH_HOST} 'cd ${REMOTE_BASE_DIR} && docker compose -f ${COMPOSE_FILE} ps'"

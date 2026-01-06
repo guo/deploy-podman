@@ -156,6 +156,10 @@ deploy_with_podman() {
     echo "Target: ${TARGET}"
     echo "Container: ${CONTAINER_NAME}"
     echo "Image: ${FULL_IMAGE}"
+    IMAGE_DIGEST=$(ssh ${SSH_HOST} "podman inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
+    if [ -n "$IMAGE_DIGEST" ]; then
+        echo "Image Digest: ${IMAGE_DIGEST}"
+    fi
     if [ -n "$PORT_MAPPINGS" ]; then
         echo "Ports: ${PORT_MAPPINGS}"
     fi
