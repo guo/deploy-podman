@@ -16,6 +16,29 @@
 ENGINE="podman"
 
 # ============================================================================
+# ZERO-DOWNTIME DEPLOYMENT (Optional)
+# ============================================================================
+# Enable Caddy-based zero-downtime deployment (blue-green strategy)
+# Default: "false" (standard deployment with brief downtime)
+#
+# When enabled:
+#   - Requires single-container mode (not compose)
+#   - Requires Caddy to be set up first: ./setup-caddy.sh <target>
+#   - Requires DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT settings
+#   - Uses blue-green deployment with health checks
+#   - Zero downtime during deployments
+#
+# Set to "true" for:
+#   - Production environments requiring zero downtime
+#   - Customer-facing applications with SLA requirements
+#   - Deployments that need health check validation
+#
+# Examples:
+#   USE_CADDY="false"  # Standard deployment (default, brief downtime)
+#   USE_CADDY="true"   # Zero-downtime deployment via Caddy
+USE_CADDY="false"
+
+# ============================================================================
 # SINGLE-CONTAINER CONFIGURATION
 # (Required for single-container deployments, ignored for compose)
 # ============================================================================

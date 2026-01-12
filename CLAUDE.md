@@ -41,13 +41,17 @@ The deployment system uses a simple directory-based structure:
 3. **Configuration files**
    - `.config` - Deployment settings (bash variables)
      - `ENGINE` - Container engine: `"podman"` or `"docker"` (default: podman for single-container, docker for compose)
+     - `USE_CADDY` - Enable zero-downtime deployment (format: `"true"` or `"false"`, default: false)
+       - Requires single-container mode (not compose)
+       - Requires Caddy to be set up first via setup-caddy.sh
+       - Requires DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT settings
      - `CONTAINER_IMAGE` - Docker/OCI image to deploy (without tag, specified at runtime) - **Required for single-container only**
      - `GHCR_USERNAME` / `GHCR_TOKEN` - Registry credentials (empty for public images)
      - `SSH_HOST` - Remote server hostname - **Always required**
      - `CONTAINER_NAME` - Container name (defaults to target directory name)
      - `PORT_MAPPINGS` - Port mappings for direct deployment (format: `"80:3000,443:3001"`) - **Single-container only**
      - `FILE_MAPPINGS` - Volume mounts (format: `"file:path,file2:path2"`) - **Single-container only**
-     - Caddy-specific (for deploy-with-caddy.sh):
+     - Caddy-specific (when USE_CADDY="true"):
        - `DOMAIN` - Domain name for automatic HTTPS
        - `APP_PORT` - Internal application port (default: 3000)
        - `HEALTH_CHECK_PATH` - Health check endpoint (default: "/")
@@ -63,19 +67,25 @@ The deployment system uses a simple directory-based structure:
 
 ### Script Architecture
 
-- **deploy-ssh.sh** - Main unified deployment script with auto-detection
+- **deploy-ssh.sh** - Main unified deployment script
   - Auto-detects deployment mode (single vs compose) and engine (Docker vs Podman)
+  - Supports zero-downtime deployment via USE_CADDY configuration flag
+  - Single entry point for all deployments
   - Delegates to modular implementations in `lib/` directory
 
-- **deploy-podman-ssh.sh** - Backward compatibility wrapper (calls deploy-ssh.sh)
-
 - **lib/deploy-podman.sh** - Podman single-container deployment module
+  - Standard deployment with brief downtime
 
 - **lib/deploy-docker.sh** - Docker deployment module (single-container + compose)
   - Contains two functions: `deploy_docker_single()` and `deploy_docker_compose()`
   - Handles Docker installation, registry authentication, and deployment
   - **Single-container**: Similar to Podman but uses Docker commands
   - **Compose**: Installs Docker Compose v2, deploys multi-container stacks
+
+- **lib/deploy-caddy.sh** - Caddy zero-downtime deployment module
+  - Blue-green deployment strategy with health checks
+  - Activated when USE_CADDY="true" in target configuration
+  - Single-container only (not compose)
 
 ### Deployment Flow
 
@@ -98,7 +108,19 @@ The deployment system uses a simple directory-based structure:
 6. Runs `docker compose up -d` (starts new stack)
 7. Verifies all services running
 
-**Note:** All deployment methods have brief downtime during updates
+**Zero-Downtime (Caddy Blue-Green):**
+1. Validates configuration and SSH connection
+2. Verifies Caddy container is running
+3. Uploads target files to remote server
+4. Authenticates with registry (if credentials provided)
+5. Pulls image
+6. Starts new container (blue) on alternate port with health check
+7. Switches Caddy traffic to blue container
+8. Stops old container and recreates on standard port
+9. Switches traffic back and removes blue container
+10. Verifies deployment
+
+**Note:** Standard deployment methods have brief downtime. Use USE_CADDY="true" for zero-downtime.
 
 - **setup-caddy.sh** - One-time Caddy reverse proxy setup per target
   - Creates Caddy container per target: `caddy-{target}`
@@ -107,22 +129,6 @@ The deployment system uses a simple directory-based structure:
   - Mounts Caddyfile and certificate storage volumes
   - Exposes ports 80/443 on Caddy container
   - **Usage:** `./setup-caddy.sh <target>` (run once per target)
-
-- **deploy-with-caddy.sh** - Zero-downtime deployment via Caddy (production-ready)
-  - **Single-container only**: Does not support compose targets (will error with helpful message)
-  - Supports image tag specification: `./deploy-with-caddy.sh <target> [tag]`
-  - Requires Caddy to be set up first via `setup-caddy.sh`
-  - Blue-green deployment strategy:
-    1. Starts new container (blue) on alternate port (3001)
-    2. Runs health check with configurable timeout
-    3. Switches Caddy traffic to blue container
-    4. Stops old container (green)
-    5. Recreates container on standard port (3000)
-    6. Switches Caddy back to standard port
-    7. Removes temporary blue container
-  - Auto-rollback: If health check fails, removes new container and keeps old one running
-  - Zero downtime: Traffic continues to flow during entire deployment
-  - Supports specific image tags for rollbacks: `./deploy-with-caddy.sh target v1.2.2`
 
 - **deploy-multi.sh** - Batch deployment wrapper
   - Discovers targets from `targets/` directory structure
@@ -133,21 +139,31 @@ The deployment system uses a simple directory-based structure:
   - Uses background processes for parallel execution with wait/trap for synchronization
   - Tracks success/failure via temporary `.deploy-{target}.result` files
 
-### Which Deployment Method to Use?
+### Deployment Strategy Selection
 
-**Use deploy-podman-ssh.sh when:**
+**Use deploy-ssh.sh for all deployments** (unified command):
+
+**With USE_CADDY="false"** (default - brief downtime):
 - Development/staging environments where brief downtime is acceptable
-- Simple single-container deployments
 - Quick iterations during development
-- No reverse proxy infrastructure needed
+- Cost-sensitive environments (simpler infrastructure)
 
-**Use deploy-with-caddy.sh when:**
+**With USE_CADDY="true"** (zero-downtime):
 - Production environments requiring zero downtime
-- Customer-facing applications
-- SLA requirements for uptime
+- Customer-facing applications with SLA requirements
 - Need automatic HTTPS (Let's Encrypt)
 - Want health checks before switching traffic
 - Need easy rollback capabilities
+
+**Configuration:**
+```bash
+# In targets/myapp-prod/.config:
+USE_CADDY="true"           # Enable zero-downtime (default: false)
+DOMAIN="myapp.com"         # For automatic HTTPS
+APP_PORT="3000"            # Internal app port
+HEALTH_CHECK_PATH="/"      # Health endpoint
+HEALTH_CHECK_TIMEOUT="30"  # Timeout in seconds
+```
 
 **Image Tag Strategy:**
 - **Development:** Use `latest` tag for continuous deployment
@@ -237,17 +253,17 @@ volumes:
 **Deployment**:
 ```bash
 # Deploy with latest tag
-./deploy-podman-ssh.sh myapp-prod
+./deploy-ssh.sh myapp-prod
 
 # Deploy specific version
-./deploy-podman-ssh.sh myapp-prod v1.2.3
+./deploy-ssh.sh myapp-prod v1.2.3
 
 # Multi-target deploy (supports both single and compose targets)
 ./deploy-multi.sh --all
 ```
 
 **Limitations**:
-- ⚠️ **No zero-downtime support**: `deploy-with-caddy.sh` does not support compose targets yet. Use `deploy-podman-ssh.sh` (brief downtime during redeployment).
+- ⚠️ **No zero-downtime support**: Compose targets do not support USE_CADDY="true" yet. Use standard deployment (brief downtime during redeployment).
 - For multiple registries, pre-authenticate on remote server using `podman login`
 
 **Future**: Zero-downtime compose deployment planned for future release.
@@ -278,16 +294,18 @@ echo '{"key":"value"}' > targets/myapp-prod/config.json
 echo 'FILE_MAPPINGS="config.json:/app/config.json"' >> targets/myapp-prod/.config
 ```
 
-### Deployment (Direct - with brief downtime)
+### Deployment
+
+#### Quick Start (Brief Downtime - Default)
 ```bash
 # Deploy latest image
-./deploy-podman-ssh.sh myapp-prod
+./deploy-ssh.sh myapp-prod
 
 # Deploy specific version
-./deploy-podman-ssh.sh myapp-prod v1.2.3
+./deploy-ssh.sh myapp-prod v1.2.3
 
 # Deploy specific commit
-./deploy-podman-ssh.sh myapp-prod sha-abc123
+./deploy-ssh.sh myapp-prod sha-abc123
 
 # Deploy to all targets (lists all and asks for confirmation)
 ./deploy-multi.sh --all
@@ -295,35 +313,33 @@ echo 'FILE_MAPPINGS="config.json:/app/config.json"' >> targets/myapp-prod/.confi
 # Deploy to all targets in parallel
 ./deploy-multi.sh --all --parallel
 
-# Deploy to specific targets
-./deploy-multi.sh myapp-prod myapp-staging
-
-# Deploy to specific targets in parallel
-./deploy-multi.sh --parallel myapp-prod myapp-staging
-
 # List available targets
-./deploy-podman-ssh.sh --help
+./deploy-ssh.sh --help
 ```
 
-### Zero-Downtime Deployment with Caddy
+#### Zero-Downtime Deployment (Production)
 ```bash
-# First-time setup (run once per target)
+# 1. First-time setup (run once per target)
 ./setup-caddy.sh myapp-prod
 
-# Deploy latest (zero-downtime)
-./deploy-with-caddy.sh myapp-prod
+# 2. Enable Caddy in target configuration
+echo 'USE_CADDY="true"' >> targets/myapp-prod/.config
+# Also add: DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT
 
-# Deploy specific version
-./deploy-with-caddy.sh myapp-prod v1.2.3
+# 3. Deploy with zero-downtime (same command!)
+./deploy-ssh.sh myapp-prod           # Deploy latest
+./deploy-ssh.sh myapp-prod v1.2.3    # Deploy specific version
+./deploy-ssh.sh myapp-prod v1.2.2    # Rollback to previous version
+```
 
-# Rollback to previous version
-./deploy-with-caddy.sh myapp-prod v1.2.2
-
-# Prerequisites in targets/myapp-prod/.config:
-#   DOMAIN="myapp.com"           # For automatic HTTPS
-#   APP_PORT="3000"              # Internal app port
-#   HEALTH_CHECK_PATH="/"        # Health endpoint
-#   HEALTH_CHECK_TIMEOUT="30"    # Timeout in seconds
+**Configuration requirements for USE_CADDY:**
+```bash
+# In targets/myapp-prod/.config:
+USE_CADDY="true"           # Enable zero-downtime
+DOMAIN="myapp.com"         # For automatic HTTPS
+APP_PORT="3000"            # Internal app port
+HEALTH_CHECK_PATH="/"      # Health endpoint
+HEALTH_CHECK_TIMEOUT="30"  # Timeout in seconds
 ```
 
 ### Remote Container Management

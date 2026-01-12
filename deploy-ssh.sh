@@ -85,6 +85,9 @@ else
     exit 1
 fi
 
+# Check if Caddy zero-downtime deployment is enabled
+USE_CADDY="${USE_CADDY:-false}"
+
 # Detect deployment mode and engine
 COMPOSE_FILE=""
 DEPLOY_MODE="single"
@@ -103,6 +106,37 @@ else
     # Single-container mode - use ENGINE from config or default to podman
     ENGINE="${ENGINE:-podman}"
     echo "Detected: Single-container deployment (using ${ENGINE})"
+fi
+
+# Validate Caddy configuration if enabled
+if [ "$USE_CADDY" = "true" ]; then
+    # Caddy only supports single-container deployments
+    if [ "$DEPLOY_MODE" = "compose" ]; then
+        echo "❌ Error: USE_CADDY=true not supported for compose deployments"
+        echo "Target '${TARGET}' has compose.yml (multi-container)"
+        echo ""
+        echo "Options:"
+        echo "  1. Set USE_CADDY=false in ${TARGET_DIR}/.config"
+        echo "  2. Use deploy-ssh.sh without USE_CADDY for compose (brief downtime)"
+        echo ""
+        echo "Zero-downtime compose deployment is planned for future release."
+        exit 1
+    fi
+
+    # Validate required Caddy settings
+    if [ -z "$DOMAIN" ]; then
+        echo "⚠️  Warning: DOMAIN not set in ${TARGET_DIR}/.config"
+        echo "DOMAIN is recommended for automatic HTTPS with Caddy"
+        echo ""
+    fi
+
+    # Set defaults for health check
+    APP_PORT="${APP_PORT:-3000}"
+    HEALTH_CHECK_PATH="${HEALTH_CHECK_PATH:-/}"
+    HEALTH_CHECK_TIMEOUT="${HEALTH_CHECK_TIMEOUT:-30}"
+
+    echo "✓ Caddy zero-downtime deployment enabled"
+    echo ""
 fi
 
 # Default CONTAINER_NAME to target name if not specified (single container mode only)
@@ -166,7 +200,11 @@ echo "✓ Target files uploaded to ${REMOTE_BASE_DIR}"
 echo ""
 
 # Delegate to appropriate deployment module
-if [ "$DEPLOY_MODE" = "compose" ]; then
+if [ "$USE_CADDY" = "true" ]; then
+    # Zero-downtime deployment via Caddy (single-container only)
+    source "${SCRIPT_DIR}/lib/deploy-caddy.sh"
+    deploy_with_caddy
+elif [ "$DEPLOY_MODE" = "compose" ]; then
     # Docker Compose deployment
     source "${SCRIPT_DIR}/lib/deploy-docker.sh"
     deploy_docker_compose
