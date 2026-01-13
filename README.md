@@ -8,12 +8,12 @@ This repository provides deployment automation with **dual container engine supp
 
 ### Deployment Methods
 
-1. **Direct Deployment** (`deploy-ssh.sh` or `deploy-podman-ssh.sh`) - Automatic engine selection
+1. **Direct Deployment** (`deploy.sh` or `deploy.sh`) - Automatic engine selection
    - **Single-container**: Podman (default) or Docker (configurable via `ENGINE` in `.config`)
    - **Multi-container (compose)**: Docker (automatic)
    - Brief downtime during updates
 
-2. **Zero-Downtime Deployment** (`deploy-with-caddy.sh`) - Blue-green deployment via Caddy
+2. **Zero-Downtime Deployment** (`deploy.sh with USE_CADDY="true"`) - Blue-green deployment via Caddy
    - Single-container only (Podman or Docker)
    - Production-ready with health checks
 
@@ -87,9 +87,9 @@ deploy-podman/
 │       ├── .config             # Required: deployment configuration
 │       ├── .env                # Required: environment variables
 │       └── config.json         # Optional: additional files
-├── deploy-podman-ssh.sh        # Direct deployment (brief downtime)
+├── deploy.sh        # Direct deployment (brief downtime)
 ├── setup-caddy.sh              # One-time Caddy setup
-├── deploy-with-caddy.sh        # Zero-downtime deployment
+├── deploy.sh with USE_CADDY="true"        # Zero-downtime deployment
 └── deploy-multi.sh             # Batch deployment
 ```
 
@@ -109,11 +109,11 @@ GHCR_TOKEN="ghp_your_token"
 SSH_HOST="your-ssh-host"
 CONTAINER_NAME="myapp-prod"
 
-# Direct Deployment Settings (deploy-podman-ssh.sh)
-PORT_MAPPINGS="80:3000"  # Only used by deploy-podman-ssh.sh
+# Direct Deployment Settings (deploy.sh)
+PORT_MAPPINGS="80:3000"  # Only used by deploy.sh
 FILE_MAPPINGS="config.json:/app/config.json"
 
-# Caddy Deployment Settings (deploy-with-caddy.sh)
+# Caddy Deployment Settings (deploy.sh with USE_CADDY="true")
 DOMAIN="example.com"
 APP_PORT="3000"
 HEALTH_CHECK_PATH="/"
@@ -149,13 +149,13 @@ PORT=3000
 | `CONTAINER_NAME` | Container name (defaults to target) | `myapp-prod` |
 | `FILE_MAPPINGS` | Volume mounts | `config.json:/app/config.json` |
 
-#### Direct Deployment Only (`deploy-podman-ssh.sh`)
+#### Direct Deployment Only (`deploy.sh`)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `PORT_MAPPINGS` | Host to container port mapping | `80:3000,443:3443` |
 
-#### Caddy Deployment Only (`deploy-with-caddy.sh`)
+#### Caddy Deployment Only (`deploy.sh with USE_CADDY="true"`)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
@@ -170,24 +170,24 @@ PORT=3000
 
 ### Method 1: Direct Deployment (Simple, Brief Downtime)
 
-Use `deploy-podman-ssh.sh` for simple deployments where brief downtime during updates is acceptable.
+Use `deploy.sh` for simple deployments where brief downtime during updates is acceptable.
 
 ```bash
 # Deploy latest version
-./deploy-podman-ssh.sh myapp-prod
+./deploy.sh myapp-prod
 
 # Deploy specific version/tag
-./deploy-podman-ssh.sh myapp-prod v1.2.3
+./deploy.sh myapp-prod v1.2.3
 
 # Rollback to previous version
-./deploy-podman-ssh.sh myapp-prod v1.2.2
+./deploy.sh myapp-prod v1.2.2
 ```
 
 **Process**: Stops old container → Removes → Starts new container
 
 ### Method 2: Zero-Downtime Deployment (Caddy + Blue-Green)
 
-Use `setup-caddy.sh` + `deploy-with-caddy.sh` for production deployments requiring zero downtime.
+Use `setup-caddy.sh` + `deploy.sh with USE_CADDY="true"` for production deployments requiring zero downtime.
 
 #### Initial Setup (One-Time)
 
@@ -205,13 +205,13 @@ This creates a Caddy container that:
 
 ```bash
 # Deploy latest version with zero downtime
-./deploy-with-caddy.sh myapp-prod
+./deploy.sh with USE_CADDY="true" myapp-prod
 
 # Deploy specific version
-./deploy-with-caddy.sh myapp-prod v1.2.3
+./deploy.sh with USE_CADDY="true" myapp-prod v1.2.3
 
 # Rollback with zero downtime
-./deploy-with-caddy.sh myapp-prod v1.2.2
+./deploy.sh with USE_CADDY="true" myapp-prod v1.2.2
 ```
 
 **Process**:
@@ -267,10 +267,10 @@ vi targets/myapp-prod/.env
 
 ```bash
 # Deploy with latest tag (auto-detects compose)
-./deploy-podman-ssh.sh myapp-prod
+./deploy.sh myapp-prod
 
 # Deploy specific version
-./deploy-podman-ssh.sh myapp-prod v1.2.3
+./deploy.sh myapp-prod v1.2.3
 
 # Deploy to multiple compose targets
 ./deploy-multi.sh --all
@@ -281,8 +281,8 @@ vi targets/myapp-prod/.env
 **Configuration**: For compose targets, the `.config` file is simplified - only `SSH_HOST` is required. All container settings (images, ports, volumes, networks) are defined in the compose file.
 
 **Limitations**:
-- ⚠️ Zero-downtime deployment (`deploy-with-caddy.sh`) does not support compose targets yet
-- Use `deploy-podman-ssh.sh` for compose deployments (brief downtime during update)
+- ⚠️ Zero-downtime deployment (`deploy.sh with USE_CADDY="true"`) does not support compose targets yet
+- Use `deploy.sh` for compose deployments (brief downtime during update)
 
 See [compose.example.yml](compose.example.yml) for a complete example and [CLAUDE.md](CLAUDE.md#compose-deployments-multi-container) for detailed documentation.
 
@@ -344,7 +344,7 @@ Check these files if a deployment fails.
 
 ## How It Works
 
-### Direct Deployment (`deploy-podman-ssh.sh`)
+### Direct Deployment (`deploy.sh`)
 
 **Auto-detects** deployment mode: single-container or compose
 
@@ -382,7 +382,7 @@ Check these files if a deployment fails.
    - Runs `DOCKER_HOST=unix:///run/podman/podman.sock docker-compose up -d`
 9. **Verifies** - Confirms all services are running
 
-### Zero-Downtime Deployment (`deploy-with-caddy.sh`)
+### Zero-Downtime Deployment (`deploy.sh with USE_CADDY="true"`)
 
 **Prerequisites**: Run `./setup-caddy.sh <target>` once to create Caddy container
 

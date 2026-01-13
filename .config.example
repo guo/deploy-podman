@@ -79,7 +79,7 @@ GHCR_TOKEN=""
 SSH_HOST="your-hostname"
 
 # ============================================================================
-# ZERO-DOWNTIME DEPLOYMENT (deploy-with-caddy.sh)
+# ZERO-DOWNTIME DEPLOYMENT (USE_CADDY="true")
 # (Only for single-container deployments)
 # ============================================================================
 

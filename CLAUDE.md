@@ -67,7 +67,7 @@ The deployment system uses a simple directory-based structure:
 
 ### Script Architecture
 
-- **deploy-ssh.sh** - Main unified deployment script
+- **deploy.sh** - Main unified deployment script
   - Auto-detects deployment mode (single vs compose) and engine (Docker vs Podman)
   - Supports zero-downtime deployment via USE_CADDY configuration flag
   - Single entry point for all deployments
@@ -141,7 +141,7 @@ The deployment system uses a simple directory-based structure:
 
 ### Deployment Strategy Selection
 
-**Use deploy-ssh.sh for all deployments** (unified command):
+**Use deploy.sh for all deployments** (unified command):
 
 **With USE_CADDY="false"** (default - brief downtime):
 - Development/staging environments where brief downtime is acceptable
@@ -253,10 +253,10 @@ volumes:
 **Deployment**:
 ```bash
 # Deploy with latest tag
-./deploy-ssh.sh myapp-prod
+./deploy.sh myapp-prod
 
 # Deploy specific version
-./deploy-ssh.sh myapp-prod v1.2.3
+./deploy.sh myapp-prod v1.2.3
 
 # Multi-target deploy (supports both single and compose targets)
 ./deploy-multi.sh --all
@@ -299,13 +299,13 @@ echo 'FILE_MAPPINGS="config.json:/app/config.json"' >> targets/myapp-prod/.confi
 #### Quick Start (Brief Downtime - Default)
 ```bash
 # Deploy latest image
-./deploy-ssh.sh myapp-prod
+./deploy.sh myapp-prod
 
 # Deploy specific version
-./deploy-ssh.sh myapp-prod v1.2.3
+./deploy.sh myapp-prod v1.2.3
 
 # Deploy specific commit
-./deploy-ssh.sh myapp-prod sha-abc123
+./deploy.sh myapp-prod sha-abc123
 
 # Deploy to all targets (lists all and asks for confirmation)
 ./deploy-multi.sh --all
@@ -314,7 +314,7 @@ echo 'FILE_MAPPINGS="config.json:/app/config.json"' >> targets/myapp-prod/.confi
 ./deploy-multi.sh --all --parallel
 
 # List available targets
-./deploy-ssh.sh --help
+./deploy.sh --help
 ```
 
 #### Zero-Downtime Deployment (Production)
@@ -327,9 +327,9 @@ echo 'USE_CADDY="true"' >> targets/myapp-prod/.config
 # Also add: DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT
 
 # 3. Deploy with zero-downtime (same command!)
-./deploy-ssh.sh myapp-prod           # Deploy latest
-./deploy-ssh.sh myapp-prod v1.2.3    # Deploy specific version
-./deploy-ssh.sh myapp-prod v1.2.2    # Rollback to previous version
+./deploy.sh myapp-prod           # Deploy latest
+./deploy.sh myapp-prod v1.2.3    # Deploy specific version
+./deploy.sh myapp-prod v1.2.2    # Rollback to previous version
 ```
 
 **Configuration requirements for USE_CADDY:**

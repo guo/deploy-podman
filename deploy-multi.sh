@@ -139,7 +139,7 @@ deploy_target() {
 
     print_info "Starting deployment to ${target}..."
 
-    if "${SCRIPT_DIR}/deploy-podman-ssh.sh" "$target" 2>&1 | tee "$log_file"; then
+    if "${SCRIPT_DIR}/deploy.sh" "$target" 2>&1 | tee "$log_file"; then
         echo "SUCCESS" > "${SCRIPT_DIR}/.deploy-${target}.result"
         print_success "Deployment to ${target} completed successfully"
         return 0

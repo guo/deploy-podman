@@ -117,7 +117,7 @@ if [ "$USE_CADDY" = "true" ]; then
         echo ""
         echo "Options:"
         echo "  1. Set USE_CADDY=false in ${TARGET_DIR}/.config"
-        echo "  2. Use deploy-ssh.sh without USE_CADDY for compose (brief downtime)"
+        echo "  2. Use deploy.sh without USE_CADDY for compose (brief downtime)"
         echo ""
         echo "Zero-downtime compose deployment is planned for future release."
         exit 1
