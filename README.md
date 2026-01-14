@@ -103,7 +103,7 @@ Each target has a `.config` file with bash variables:
 
 ```bash
 # Container Configuration
-CONTAINER_IMAGE="ghcr.io/iotexproject/depinscan"
+CONTAINER_IMAGE="ghcr.io/your-org/your-app"
 GHCR_USERNAME="your-username"
 GHCR_TOKEN="ghp_your_token"
 SSH_HOST="your-ssh-host"
