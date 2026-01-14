@@ -31,29 +31,61 @@ list_targets() {
     fi
 }
 
-# Check arguments
-if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
-    echo "Usage: $0 <target> [image-tag]"
+# Parse flags
+AUTO_CONFIRM=false
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -y|--yes)
+            AUTO_CONFIRM=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS] <target> [image-tag]"
+            echo ""
+            echo "Deploy a containerized application to a remote server via SSH."
+            echo "Supports both single-container and multi-container (compose) deployments."
+            echo "Automatically selects Docker or Podman based on target configuration."
+            echo ""
+            echo "Options:"
+            echo "  -y, --yes   Auto-confirm deployment (skip confirmation prompt)"
+            echo "  -h, --help  Show this help message"
+            echo ""
+            echo "Arguments:"
+            echo "  target      Target name (e.g., myapp)"
+            echo "  image-tag   Optional image tag (default: latest)"
+            echo ""
+            list_targets
+            echo ""
+            echo "Engine Selection:"
+            echo "  - Compose files (docker-compose.yml) → Always uses Docker"
+            echo "  - Single-container → Uses ENGINE from .config (default: podman)"
+            echo ""
+            echo "Examples:"
+            echo "  $0 myapp              # Deploy latest"
+            echo "  $0 myapp v1.2.3       # Deploy specific version"
+            echo "  $0 myapp -y           # Deploy latest with auto-confirm"
+            echo "  $0 -y myapp v1.2.3    # Deploy with auto-confirm"
+            exit 0
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Restore positional parameters
+set -- "${POSITIONAL_ARGS[@]}"
+
+# Check required arguments
+if [[ -z "$1" ]]; then
+    echo "Error: Missing required argument <target>"
     echo ""
-    echo "Deploy a containerized application to a remote server via SSH."
-    echo "Supports both single-container and multi-container (compose) deployments."
-    echo "Automatically selects Docker or Podman based on target configuration."
-    echo ""
-    echo "Arguments:"
-    echo "  target      Target name (e.g., myapp)"
-    echo "  image-tag   Optional image tag (default: latest)"
-    echo ""
-    list_targets
-    echo ""
-    echo "Engine Selection:"
-    echo "  - Compose files (docker-compose.yml) → Always uses Docker"
-    echo "  - Single-container → Uses ENGINE from .config (default: podman)"
-    echo ""
-    echo "Examples:"
-    echo "  $0 myapp              # Deploy latest"
-    echo "  $0 myapp v1.2.3       # Deploy specific version"
-    echo "  $0 myapp sha-abc123   # Deploy specific commit"
-    exit 0
+    echo "Usage: $0 [OPTIONS] <target> [image-tag]"
+    echo "Try '$0 --help' for more information."
+    exit 1
 fi
 
 TARGET="$1"
@@ -177,6 +209,66 @@ else
     REMOTE_BASE_DIR="/var/app/${CONTAINER_NAME}"
 fi
 REMOTE_ENV_FILE="${REMOTE_BASE_DIR}/.env"
+
+# Display deployment configuration
+echo "========================================"
+echo "Deployment Configuration"
+echo "========================================"
+echo "Target:           ${TARGET}"
+echo "Deploy Mode:      ${DEPLOY_MODE}"
+echo "Container Engine: ${ENGINE}"
+echo "SSH Host:         ${SSH_HOST}"
+echo ""
+
+if [ "$DEPLOY_MODE" = "single" ]; then
+    echo "Container Name:   ${CONTAINER_NAME}"
+    echo "Image:            ${FULL_IMAGE}"
+    echo ""
+fi
+
+if [ "$USE_CADDY" = "true" ]; then
+    echo "Zero-Downtime:    Enabled (Caddy)"
+    echo "Domain:           ${DOMAIN:-<not set>}"
+    echo "App Port:         ${APP_PORT}"
+    echo "Health Check:     ${HEALTH_CHECK_PATH} (timeout: ${HEALTH_CHECK_TIMEOUT}s)"
+    echo ""
+fi
+
+if [ "$DEPLOY_MODE" = "compose" ]; then
+    echo "Compose File:     ${COMPOSE_FILE}"
+    echo "Image Tag:        ${IMAGE_TAG}"
+    echo ""
+fi
+
+if [ "$DEPLOY_MODE" = "single" ] && [ -n "$PORT_MAPPINGS" ]; then
+    echo "Port Mappings:    ${PORT_MAPPINGS}"
+    echo ""
+fi
+
+if [ -n "$FILE_MAPPINGS" ]; then
+    echo "File Mappings:    ${FILE_MAPPINGS}"
+    echo ""
+fi
+
+if [ -n "$GHCR_USERNAME" ]; then
+    echo "Registry Auth:    ${GHCR_USERNAME} (token configured)"
+    echo ""
+fi
+
+echo "Remote Path:      ${REMOTE_BASE_DIR}"
+echo "========================================"
+echo ""
+
+# Confirmation prompt (skip if -y flag provided)
+if [ "$AUTO_CONFIRM" = false ]; then
+    read -p "Continue with deployment? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Deployment cancelled."
+        exit 0
+    fi
+    echo ""
+fi
 
 # Check SSH connection
 echo "Checking SSH connection to ${SSH_HOST}..."
