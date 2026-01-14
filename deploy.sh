@@ -286,6 +286,45 @@ fi
 echo "✓ SSH connection verified"
 echo ""
 
+# Check if this is a first deployment (before creating directory)
+REMOTE_DIR_EXISTS=$(ssh ${SSH_HOST} "[ -d '${REMOTE_BASE_DIR}' ] && echo 'yes' || echo 'no'")
+
+if [ "$REMOTE_DIR_EXISTS" = "no" ]; then
+    echo ""
+    echo "⚠️  WARNING: FIRST DEPLOYMENT DETECTED"
+    echo "========================================="
+    echo ""
+    echo "No existing deployment folder found on server!"
+    echo ""
+    echo "Server:        ${SSH_HOST}"
+    echo "Target:        ${TARGET}"
+    echo "Remote folder: ${REMOTE_BASE_DIR}"
+    echo ""
+    echo "This appears to be a first-time deployment for this target."
+    echo ""
+    echo "⚠️  Please verify:"
+    echo "  • Target name is correct: ${TARGET}"
+    echo "  • SSH host is correct: ${SSH_HOST}"
+    echo "  • You intend to deploy to this server"
+    echo "  • This is not an old/deprecated target"
+    echo ""
+    echo "========================================="
+    echo ""
+
+    # Always prompt for first deployment (even with -y flag)
+    read -p "Type 'yes' to proceed with FIRST deployment (or anything else to cancel): " -r
+    echo ""
+
+    if [[ ! "$REPLY" =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo "✗ Deployment cancelled"
+        echo ""
+        exit 0
+    fi
+
+    echo "✓ First deployment confirmed"
+    echo ""
+fi
+
 # Upload target directory to remote host
 echo "Uploading target files..."
 # Ensure the remote directory exists
