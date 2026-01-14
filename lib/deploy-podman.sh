@@ -3,6 +3,10 @@
 # Podman Single-Container Deployment Module
 # This module handles single-container deployments using Podman
 
+# Source hash checking functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/hash-check.sh"
+
 deploy_with_podman() {
     echo "========================================="
     echo "Podman Single-Container Deployment"
@@ -44,10 +48,51 @@ deploy_with_podman() {
     else
         echo "[2/7] Skipping container registry login (no credentials provided)"
         echo ""
+    fi
 
-        # Pull latest image without credentials (public image)
-        echo "[3/7] Pulling container image (public)..."
-        ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+    # Check if image hash has changed (unless forced)
+    if [ "${FORCE_DEPLOY:-false}" != "true" ]; then
+        echo "[3/7] Checking image hash..."
+        if ! check_image_hash_changed "podman" "${CONTAINER_NAME}" "${FULL_IMAGE}"; then
+            echo ""
+            echo "========================================="
+            echo "Deployment skipped (image unchanged)"
+            echo "========================================="
+            echo ""
+            echo "Target: ${TARGET}"
+            echo "Container: ${CONTAINER_NAME}"
+            echo "Image: ${FULL_IMAGE}"
+            echo ""
+            echo "The deployed image hash matches the target image."
+            echo "No deployment needed."
+            echo ""
+            echo "To force deployment anyway:"
+            echo "  ./deploy.sh -f ${TARGET} ${IMAGE_TAG}"
+            echo ""
+            return 0
+        fi
+        echo ""
+
+        # Pull latest image
+        echo "Pulling container image..."
+        if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
+            ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        else
+            ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        fi
+        echo "✓ Image pulled"
+        echo ""
+    else
+        echo "[3/7] Skipping hash check (forced deployment)..."
+        echo ""
+
+        # Pull latest image
+        echo "Pulling container image..."
+        if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
+            ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        else
+            ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        fi
         echo "✓ Image pulled"
         echo ""
     fi

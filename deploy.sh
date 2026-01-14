@@ -33,12 +33,17 @@ list_targets() {
 
 # Parse flags
 AUTO_CONFIRM=false
+FORCE_DEPLOY=false
 POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -y|--yes)
             AUTO_CONFIRM=true
+            shift
+            ;;
+        -f|--force)
+            FORCE_DEPLOY=true
             shift
             ;;
         --help|-h)
@@ -49,8 +54,9 @@ while [[ $# -gt 0 ]]; do
             echo "Automatically selects Docker or Podman based on target configuration."
             echo ""
             echo "Options:"
-            echo "  -y, --yes   Auto-confirm deployment (skip confirmation prompt)"
-            echo "  -h, --help  Show this help message"
+            echo "  -y, --yes     Auto-confirm deployment (skip confirmation prompt)"
+            echo "  -f, --force   Force deployment even if image hash unchanged"
+            echo "  -h, --help    Show this help message"
             echo ""
             echo "Arguments:"
             echo "  target      Target name (e.g., myapp)"
@@ -67,6 +73,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 myapp v1.2.3       # Deploy specific version"
             echo "  $0 myapp -y           # Deploy latest with auto-confirm"
             echo "  $0 -y myapp v1.2.3    # Deploy with auto-confirm"
+            echo "  $0 -f myapp           # Force deploy even if hash unchanged"
             exit 0
             ;;
         *)
@@ -290,6 +297,9 @@ scp -r "${TARGET_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/ 2>/dev/null || \
 shopt -u dotglob  # Disable dotglob
 echo "✓ Target files uploaded to ${REMOTE_BASE_DIR}"
 echo ""
+
+# Export FORCE_DEPLOY for deployment modules
+export FORCE_DEPLOY
 
 # Delegate to appropriate deployment module
 if [ "$USE_CADDY" = "true" ]; then

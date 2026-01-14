@@ -3,6 +3,10 @@
 # Docker Deployment Module
 # This module handles both single-container and compose deployments using Docker
 
+# Source hash checking functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/hash-check.sh"
+
 deploy_docker_single() {
     echo "========================================="
     echo "Docker Single-Container Deployment"
@@ -45,9 +49,42 @@ deploy_docker_single() {
     else
         echo "[2/7] Skipping container registry login (no credentials provided)"
         echo ""
+    fi
 
-        # Pull latest image without credentials (public image)
-        echo "[3/7] Pulling container image (public)..."
+    # Check if image hash has changed (unless forced)
+    if [ "${FORCE_DEPLOY:-false}" != "true" ]; then
+        echo "[3/7] Checking image hash..."
+        if ! check_image_hash_changed "docker" "${CONTAINER_NAME}" "${FULL_IMAGE}"; then
+            echo ""
+            echo "========================================="
+            echo "Deployment skipped (image unchanged)"
+            echo "========================================="
+            echo ""
+            echo "Target: ${TARGET}"
+            echo "Container: ${CONTAINER_NAME}"
+            echo "Image: ${FULL_IMAGE}"
+            echo ""
+            echo "The deployed image hash matches the target image."
+            echo "No deployment needed."
+            echo ""
+            echo "To force deployment anyway:"
+            echo "  ./deploy.sh -f ${TARGET} ${IMAGE_TAG}"
+            echo ""
+            return 0
+        fi
+        echo ""
+
+        # Pull latest image
+        echo "Pulling container image..."
+        ssh ${SSH_HOST} "docker pull ${FULL_IMAGE}"
+        echo "✓ Image pulled"
+        echo ""
+    else
+        echo "[3/7] Skipping hash check (forced deployment)..."
+        echo ""
+
+        # Pull latest image
+        echo "Pulling container image..."
         ssh ${SSH_HOST} "docker pull ${FULL_IMAGE}"
         echo "✓ Image pulled"
         echo ""
@@ -209,8 +246,39 @@ deploy_docker_compose() {
         echo ""
     fi
 
+    # Check if images have changed (unless forced)
+    if [ "${FORCE_DEPLOY:-false}" != "true" ]; then
+        echo "[4/5] Checking compose images..."
+
+        # First pull to get latest manifests for comparison
+        ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && export IMAGE_TAG='${IMAGE_TAG}' && docker compose -f ${COMPOSE_FILE} pull --quiet 2>/dev/null" || true
+
+        if ! check_compose_images_changed "${COMPOSE_FILE}"; then
+            echo ""
+            echo "========================================="
+            echo "Deployment skipped (images unchanged)"
+            echo "========================================="
+            echo ""
+            echo "Target: ${TARGET}"
+            echo "Compose File: ${COMPOSE_FILE}"
+            echo "Image Tag: ${IMAGE_TAG}"
+            echo ""
+            echo "All deployed images match the target images."
+            echo "No deployment needed."
+            echo ""
+            echo "To force deployment anyway:"
+            echo "  ./deploy.sh -f ${TARGET} ${IMAGE_TAG}"
+            echo ""
+            return 0
+        fi
+        echo ""
+    else
+        echo "[4/5] Skipping hash check (forced deployment)..."
+        echo ""
+    fi
+
     # Deploy with docker compose
-    echo "[4/5] Deploying with Docker Compose..."
+    echo "Deploying with Docker Compose..."
     echo "  → Pulling latest images..."
     ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && export IMAGE_TAG='${IMAGE_TAG}' && docker compose -f ${COMPOSE_FILE} pull"
     echo "  → Stopping existing services..."

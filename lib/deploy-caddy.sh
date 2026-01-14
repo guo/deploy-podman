@@ -3,6 +3,10 @@
 # Caddy zero-downtime deployment module
 # Uses blue-green deployment strategy with health checks
 
+# Source hash checking functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/hash-check.sh"
+
 deploy_with_caddy() {
     # Caddy settings with defaults
     APP_PORT="${APP_PORT:-3000}"
@@ -53,11 +57,44 @@ deploy_with_caddy() {
         echo ""
     fi
 
-    # Pull latest image
-    echo "[3/7] Pulling image: ${FULL_IMAGE}..."
-    ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
-    echo "✓ Image pulled"
-    echo ""
+    # Check if image hash has changed (unless forced)
+    if [ "${FORCE_DEPLOY:-false}" != "true" ]; then
+        echo "[3/7] Checking image hash..."
+        if ! check_image_hash_changed "podman" "${CONTAINER_NAME}" "${FULL_IMAGE}"; then
+            echo ""
+            echo "========================================="
+            echo "Deployment skipped (image unchanged)"
+            echo "========================================="
+            echo ""
+            echo "Target: ${TARGET}"
+            echo "Container: ${CONTAINER_NAME}"
+            echo "Image: ${FULL_IMAGE}"
+            echo ""
+            echo "The deployed image hash matches the target image."
+            echo "No deployment needed."
+            echo ""
+            echo "To force deployment anyway:"
+            echo "  ./deploy.sh -f ${TARGET} ${IMAGE_TAG}"
+            echo ""
+            return 0
+        fi
+        echo ""
+
+        # Pull latest image
+        echo "Pulling image: ${FULL_IMAGE}..."
+        ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        echo "✓ Image pulled"
+        echo ""
+    else
+        echo "[3/7] Skipping hash check (forced deployment)..."
+        echo ""
+
+        # Pull latest image
+        echo "Pulling image: ${FULL_IMAGE}..."
+        ssh ${SSH_HOST} "podman pull ${FULL_IMAGE}"
+        echo "✓ Image pulled"
+        echo ""
+    fi
 
     # Build volume mount arguments
     VOLUME_MOUNTS=""
