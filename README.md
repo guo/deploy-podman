@@ -2,18 +2,143 @@
 
 This repository contains automated deployment scripts for running containers across multiple servers/environments. Supports both **Docker** and **Podman** with automatic engine selection based on deployment type.
 
+## Installation
+
+Shipd supports two installation methods: **Homebrew** (recommended) and **Manual**.
+
+### Method 1: Homebrew (Recommended)
+
+**Best for:** macOS and Linux users with Homebrew
+
+```bash
+# Install from Homebrew tap
+brew tap yourusername/tap
+brew install shipd
+
+# Verify installation
+shipd --version
+```
+
+**Installation locations (managed by Homebrew):**
+- **Apple Silicon**: `/opt/homebrew/bin/shipd` and `/opt/homebrew/lib/shipd/`
+- **Intel Mac**: `/usr/local/bin/shipd` and `/usr/local/lib/shipd/`
+- **User data**: `~/.shipd/targets/` (created automatically)
+
+**Benefits:**
+- ✅ Automatic updates via `brew upgrade shipd`
+- ✅ Clean uninstall via `brew uninstall shipd`
+- ✅ Managed dependencies
+- ✅ Standard package management
+
+**Update/Uninstall:**
+```bash
+# Update to latest version
+brew upgrade shipd
+
+# Uninstall (preserves ~/.shipd/)
+brew uninstall shipd
+```
+
+### Method 2: Manual Install
+
+**Best for:** Systems without Homebrew, CI/CD, custom setups
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/shipd.git
+cd shipd
+
+# Run the install script
+./install.sh
+
+# Verify installation
+shipd --version
+```
+
+**Installation locations:**
+- **Command**: `/usr/local/bin/shipd`
+- **Libraries**: `/usr/local/lib/shipd/`
+- **User data**: `~/.shipd/targets/` (created automatically)
+
+**Benefits:**
+- ✅ Works without Homebrew
+- ✅ Works on any Linux distribution
+- ✅ Suitable for CI/CD pipelines
+- ✅ Full control over installation
+
+**Update/Uninstall:**
+```bash
+# Update (re-run install script)
+cd /path/to/shipd
+git pull
+./install.sh
+
+# Uninstall (preserves ~/.shipd/)
+./uninstall.sh
+```
+
+### Method 3: Development Mode (No Installation)
+
+**Best for:** Development, testing, or trying out shipd
+
+Run directly from the repository without installation:
+
+```bash
+cd /path/to/shipd
+./shipd.sh deploy myapp
+./shipd.sh deploy-multi --all
+./shipd.sh --help
+```
+
+Uses `./targets/` directory in the repository.
+
+### Target Search Order
+
+After installation (both Homebrew and manual), `shipd` searches for targets in this order:
+
+1. **`./targets/`** (current directory) - Project-specific deployments
+2. **`~/.shipd/targets/`** (home directory) - Global/shared deployments
+
+**This allows you to:**
+- Keep project-specific targets with your code (`./targets/`)
+- Store shared targets in home directory (`~/.shipd/targets/`)
+- Override home targets with local ones when needed
+- Use `shipd` from any directory
+
+**Example:**
+```bash
+# Use home directory target
+cd ~/any-project
+shipd deploy myapp              # Uses ~/.shipd/targets/myapp
+
+# Override with local target
+mkdir -p ./targets/myapp        # Create local target
+shipd deploy myapp              # Uses ./targets/myapp (priority)
+```
+
+### User Data Preservation
+
+Both uninstall methods preserve your deployment targets and configuration:
+- `~/.shipd/targets/` - Your deployment targets (preserved)
+- `~/.shipd/.config` - Optional global config (preserved)
+
+To completely remove everything:
+```bash
+rm -rf ~/.shipd
+```
+
 ## Overview
 
 This repository provides deployment automation with **dual container engine support** (Docker + Podman):
 
 ### Deployment Methods
 
-1. **Direct Deployment** (`deploy.sh` or `deploy.sh`) - Automatic engine selection
+1. **Direct Deployment** (`shipd deploy`) - Automatic engine selection
    - **Single-container**: Podman (default) or Docker (configurable via `ENGINE` in `.config`)
    - **Multi-container (compose)**: Docker (automatic)
    - Brief downtime during updates
 
-2. **Zero-Downtime Deployment** (`deploy.sh with USE_CADDY="true"`) - Blue-green deployment via Caddy
+2. **Zero-Downtime Deployment** (`shipd deploy` with `USE_CADDY="true"`) - Blue-green deployment via Caddy
    - Single-container only (Podman or Docker)
    - Production-ready with health checks
 
@@ -38,33 +163,60 @@ All methods automate:
 
 ## Initial Setup
 
-1. **(Optional) Create global defaults**
-   ```bash
-   # Copy the example configuration for global defaults
-   cp .config.example .config
+### Option 1: Project-Local Targets (Development)
 
-   # Edit with common values shared across all targets
-   vi .config
-   ```
+Best for keeping targets with your project code:
 
-2. **Create a target**
-   ```bash
-   # Create target directory
-   mkdir -p targets/myapp-prod
+```bash
+# 1. (Optional) Create global defaults
+cp .config.example .config
+vi .config
 
-   # Create target configuration
-   cp .config.example targets/myapp-prod/.config
-   vi targets/myapp-prod/.config
+# 2. Create target directory
+mkdir -p targets/myapp-prod
 
-   # Create environment file
-   cp env.example targets/myapp-prod/.env
-   vi targets/myapp-prod/.env
+# 3. Create target configuration
+cp .config.example targets/myapp-prod/.config
+vi targets/myapp-prod/.config
 
-   # (Optional) Add additional config files for volume mapping
-   echo '{"key":"value"}' > targets/myapp-prod/config.json
-   ```
+# 4. Create environment file
+cp env.example targets/myapp-prod/.env
+vi targets/myapp-prod/.env
 
-**Important**: The `.config` files and `targets/` directory contain sensitive credentials and are excluded from git via `.gitignore`. Never commit these files to version control.
+# 5. (Optional) Add additional config files
+echo '{"key":"value"}' > targets/myapp-prod/config.json
+```
+
+### Option 2: Home Directory Targets (Installed)
+
+Best for global shared targets after installing `shipd`:
+
+```bash
+# 1. Install shipd globally
+./install.sh
+
+# 2. (Optional) Create global defaults
+mkdir -p ~/.shipd
+cp .config.example ~/.shipd/.config
+vi ~/.shipd/.config
+
+# 3. Create target directory
+mkdir -p ~/.shipd/targets/myapp-prod
+
+# 4. Create target configuration
+cp .config.example ~/.shipd/targets/myapp-prod/.config
+vi ~/.shipd/targets/myapp-prod/.config
+
+# 5. Create environment file
+cp env.example ~/.shipd/targets/myapp-prod/.env
+vi ~/.shipd/targets/myapp-prod/.env
+
+# 6. Deploy from anywhere
+cd ~/projects/myapp
+shipd deploy myapp-prod
+```
+
+**Important**: The `.config` files and `targets/` directories contain sensitive credentials. The repository's `.gitignore` excludes `./targets/` and `./.config`. Never commit these files to version control.
 
 
 ## Configuration System
@@ -87,10 +239,14 @@ shipd/
 │       ├── .config             # Required: deployment configuration
 │       ├── .env                # Required: environment variables
 │       └── config.json         # Optional: additional files
-├── deploy.sh        # Direct deployment (brief downtime)
-├── setup-caddy.sh              # One-time Caddy setup
-├── deploy.sh with USE_CADDY="true"        # Zero-downtime deployment
-└── deploy-multi.sh             # Batch deployment
+├── shipd.sh                    # Main CLI entry point
+└── lib/
+    ├── cmd-deploy.sh           # Deploy command
+    ├── cmd-deploy-multi.sh     # Multi-target deploy command
+    ├── cmd-setup-caddy.sh      # Caddy setup command
+    ├── deploy-podman.sh        # Podman deployment module
+    ├── deploy-docker.sh        # Docker deployment module
+    └── deploy-caddy.sh         # Caddy zero-downtime module
 ```
 
 Files are uploaded to remote host at `/var/app/${CONTAINER_NAME}/`
@@ -109,11 +265,12 @@ GHCR_TOKEN="ghp_your_token"
 SSH_HOST="your-ssh-host"
 CONTAINER_NAME="myapp-prod"
 
-# Direct Deployment Settings (deploy.sh)
-PORT_MAPPINGS="80:3000"  # Only used by deploy.sh
+# Direct Deployment Settings (shipd deploy)
+PORT_MAPPINGS="80:3000"  # Only used by direct deploy
 FILE_MAPPINGS="config.json:/app/config.json"
 
-# Caddy Deployment Settings (deploy.sh with USE_CADDY="true")
+# Caddy Deployment Settings (shipd deploy with USE_CADDY="true")
+USE_CADDY="true"
 DOMAIN="example.com"
 APP_PORT="3000"
 HEALTH_CHECK_PATH="/"
@@ -149,13 +306,13 @@ PORT=3000
 | `CONTAINER_NAME` | Container name (defaults to target) | `myapp-prod` |
 | `FILE_MAPPINGS` | Volume mounts | `config.json:/app/config.json` |
 
-#### Direct Deployment Only (`deploy.sh`)
+#### Direct Deployment Only (`shipd deploy`)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `PORT_MAPPINGS` | Host to container port mapping | `80:3000,443:3443` |
 
-#### Caddy Deployment Only (`deploy.sh with USE_CADDY="true"`)
+#### Caddy Deployment Only (`shipd deploy` with `USE_CADDY="true"`)
 
 | Variable | Description | Example |
 |----------|-------------|---------|
@@ -174,26 +331,26 @@ Use `deploy.sh` for simple deployments where brief downtime during updates is ac
 
 ```bash
 # Deploy latest version
-./deploy.sh myapp-prod
+shipd deploy myapp-prod
 
 # Deploy specific version/tag
-./deploy.sh myapp-prod v1.2.3
+shipd deploy myapp-prod v1.2.3
 
 # Rollback to previous version
-./deploy.sh myapp-prod v1.2.2
+shipd deploy myapp-prod v1.2.2
 ```
 
 **Process**: Stops old container → Removes → Starts new container
 
 ### Method 2: Zero-Downtime Deployment (Caddy + Blue-Green)
 
-Use `setup-caddy.sh` + `deploy.sh with USE_CADDY="true"` for production deployments requiring zero downtime.
+Use `shipd setup-caddy` + `shipd deploy` (with `USE_CADDY="true"`) for production deployments requiring zero downtime.
 
 #### Initial Setup (One-Time)
 
 ```bash
 # Setup Caddy reverse proxy for the target
-./setup-caddy.sh myapp-prod
+shipd setup-caddy myapp-prod
 ```
 
 This creates a Caddy container that:
@@ -205,13 +362,13 @@ This creates a Caddy container that:
 
 ```bash
 # Deploy latest version with zero downtime
-./deploy.sh with USE_CADDY="true" myapp-prod
+shipd deploy with USE_CADDY="true" myapp-prod
 
 # Deploy specific version
-./deploy.sh with USE_CADDY="true" myapp-prod v1.2.3
+shipd deploy with USE_CADDY="true" myapp-prod v1.2.3
 
 # Rollback with zero downtime
-./deploy.sh with USE_CADDY="true" myapp-prod v1.2.2
+shipd deploy with USE_CADDY="true" myapp-prod v1.2.2
 ```
 
 **Process**:
@@ -267,13 +424,13 @@ vi targets/myapp-prod/.env
 
 ```bash
 # Deploy with latest tag (auto-detects compose)
-./deploy.sh myapp-prod
+shipd deploy myapp-prod
 
 # Deploy specific version
-./deploy.sh myapp-prod v1.2.3
+shipd deploy myapp-prod v1.2.3
 
 # Deploy to multiple compose targets
-./deploy-multi.sh --all
+shipd deploy-multi --all
 ```
 
 **Auto-detection**: If `compose.yml` or `docker-compose.yml` exists in the target directory, the deployment script automatically uses `podman compose` instead of single-container deployment.
@@ -281,8 +438,8 @@ vi targets/myapp-prod/.env
 **Configuration**: For compose targets, the `.config` file is simplified - only `SSH_HOST` is required. All container settings (images, ports, volumes, networks) are defined in the compose file.
 
 **Limitations**:
-- ⚠️ Zero-downtime deployment (`deploy.sh with USE_CADDY="true"`) does not support compose targets yet
-- Use `deploy.sh` for compose deployments (brief downtime during update)
+- ⚠️ Zero-downtime deployment (`shipd deploy` with `USE_CADDY="true"`) does not support compose targets yet
+- Use `shipd deploy` for compose deployments (brief downtime during update)
 
 See [compose.example.yml](compose.example.yml) for a complete example and [CLAUDE.md](CLAUDE.md#compose-deployments-multi-container) for detailed documentation.
 
@@ -294,10 +451,10 @@ Use the `deploy-multi.sh` script to deploy to multiple targets at once.
 
 ```bash
 # Deploy to all targets sequentially (with confirmation)
-./deploy-multi.sh --all
+shipd deploy-multi --all
 
 # Deploy to all targets in parallel
-./deploy-multi.sh --all --parallel
+shipd deploy-multi --all --parallel
 ```
 
 When using `--all`, the script will:
@@ -308,16 +465,16 @@ When using `--all`, the script will:
 
 ```bash
 # Deploy to specific targets sequentially
-./deploy-multi.sh deployment1 deployment2
+shipd deploy-multi deployment1 deployment2
 
 # Deploy to specific targets in parallel
-./deploy-multi.sh --parallel deployment1 deployment2
+shipd deploy-multi --parallel deployment1 deployment2
 ```
 
 ### Options
 
 ```
-Usage: ./deploy-multi.sh [OPTIONS] <TARGETS...>
+Usage: shipd deploy-multi [OPTIONS] <TARGETS...>
 
 Options:
   --all              Deploy to all configured targets
@@ -326,13 +483,13 @@ Options:
   -h, --help         Show help message
 
 Examples:
-  ./deploy-multi.sh --all                     # Deploy to all (with confirmation)
-  ./deploy-multi.sh --all --parallel          # Deploy to all in parallel
-  ./deploy-multi.sh staging production        # Deploy to staging and production
-  ./deploy-multi.sh -p staging production     # Deploy to both in parallel
+  shipd deploy-multi --all                     # Deploy to all (with confirmation)
+  shipd deploy-multi --all --parallel          # Deploy to all in parallel
+  shipd deploy-multi staging production        # Deploy to staging and production
+  shipd deploy-multi -p staging production     # Deploy to both in parallel
 ```
 
-Note: Running `./deploy-multi.sh` without arguments will show the help message.
+Note: Running `shipd deploy-multi` without arguments will show the help message.
 
 ### Deployment Logs
 
@@ -344,7 +501,7 @@ Check these files if a deployment fails.
 
 ## How It Works
 
-### Direct Deployment (`deploy.sh`)
+### Direct Deployment (`shipd deploy`)
 
 **Auto-detects** deployment mode: single-container or compose
 
@@ -384,7 +541,7 @@ Check these files if a deployment fails.
 
 ### Zero-Downtime Deployment (`deploy.sh with USE_CADDY="true"`)
 
-**Prerequisites**: Run `./setup-caddy.sh <target>` once to create Caddy container
+**Prerequisites**: Run `shipd setup-caddy <target>` once to create Caddy container
 
 1. **Loads configuration** - Sources global `.config` (if exists), then target `.config`
 2. **Validates** - Checks Caddy container is running

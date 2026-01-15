@@ -2,14 +2,46 @@
 
 set -e
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detect lib directory (for sourcing deployment modules)
+if [ -d "/opt/homebrew/lib/shipd" ] && [ ! -d "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib" ]; then
+    # Homebrew (Apple Silicon)
+    LIB_DIR="/opt/homebrew/lib/shipd"
+elif [ -d "/usr/local/lib/shipd" ] && [ ! -d "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib" ]; then
+    # Homebrew (Intel) or manual install
+    LIB_DIR="/usr/local/lib/shipd"
+else
+    # Development mode
+    LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+# Find targets directory (search current dir, then home dir)
+find_targets_dir() {
+    if [ -d "./targets" ]; then
+        echo "$(pwd)/targets"
+    elif [ -d "$HOME/.shipd/targets" ]; then
+        echo "$HOME/.shipd/targets"
+    else
+        echo ""
+    fi
+}
+
+# Find global config file (search current dir, then home dir)
+find_global_config() {
+    if [ -f "./.config" ]; then
+        echo "$(pwd)/.config"
+    elif [ -f "$HOME/.shipd/.config" ]; then
+        echo "$HOME/.shipd/.config"
+    else
+        echo ""
+    fi
+}
 
 # Function to list available targets
 list_targets() {
+    local TARGETS_DIR=$(find_targets_dir)
     echo "Available targets:"
-    if [ -d "${SCRIPT_DIR}/targets" ]; then
-        for dir in "${SCRIPT_DIR}/targets"/*/ ; do
+    if [ -n "$TARGETS_DIR" ] && [ -d "$TARGETS_DIR" ]; then
+        for dir in "$TARGETS_DIR"/*/ ; do
             if [ -d "$dir" ]; then
                 target_name=$(basename "$dir")
                 # Detect deployment mode
@@ -27,7 +59,10 @@ list_targets() {
             fi
         done
     else
-        echo "  (no targets found - create targets/ directory)"
+        echo "  (no targets found)"
+        echo "  Searched:"
+        echo "    - ./targets/"
+        echo "    - ~/.shipd/targets/"
     fi
 }
 
@@ -47,7 +82,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            echo "Usage: $0 [OPTIONS] <target> [image-tag]"
+            echo "Usage: shipd deploy [OPTIONS] <target> [image-tag]"
             echo ""
             echo "Deploy a containerized application to a remote server via SSH."
             echo "Supports both single-container and multi-container (compose) deployments."
@@ -69,11 +104,11 @@ while [[ $# -gt 0 ]]; do
             echo "  - Single-container → Uses ENGINE from .config (default: podman)"
             echo ""
             echo "Examples:"
-            echo "  $0 myapp              # Deploy latest"
-            echo "  $0 myapp v1.2.3       # Deploy specific version"
-            echo "  $0 myapp -y           # Deploy latest with auto-confirm"
-            echo "  $0 -y myapp v1.2.3    # Deploy with auto-confirm"
-            echo "  $0 -f myapp           # Force deploy even if hash unchanged"
+            echo "  shipd deploy myapp              # Deploy latest"
+            echo "  shipd deploy myapp v1.2.3       # Deploy specific version"
+            echo "  shipd deploy myapp -y           # Deploy latest with auto-confirm"
+            echo "  shipd deploy -y myapp v1.2.3    # Deploy with auto-confirm"
+            echo "  shipd deploy -f myapp           # Force deploy even if hash unchanged"
             exit 0
             ;;
         *)
@@ -90,28 +125,51 @@ set -- "${POSITIONAL_ARGS[@]}"
 if [[ -z "$1" ]]; then
     echo "Error: Missing required argument <target>"
     echo ""
-    echo "Usage: $0 [OPTIONS] <target> [image-tag]"
-    echo "Try '$0 --help' for more information."
+    echo "Usage: shipd deploy [OPTIONS] <target> [image-tag]"
+    echo "Try 'shipd deploy --help' for more information."
     exit 1
 fi
 
 TARGET="$1"
 IMAGE_TAG="${2:-latest}"
-TARGET_DIR="${SCRIPT_DIR}/targets/${TARGET}"
+
+# Find targets directory and locate target
+TARGETS_DIR=$(find_targets_dir)
+if [ -z "$TARGETS_DIR" ]; then
+    echo "Error: No targets directory found"
+    echo ""
+    echo "Searched locations:"
+    echo "  - ./targets/"
+    echo "  - ~/.shipd/targets/"
+    echo ""
+    echo "Create one with:"
+    echo "  mkdir -p ./targets/${TARGET}"
+    echo "  or"
+    echo "  mkdir -p ~/.shipd/targets/${TARGET}"
+    exit 1
+fi
+
+TARGET_DIR="${TARGETS_DIR}/${TARGET}"
 
 # Verify target directory exists
 if [ ! -d "$TARGET_DIR" ]; then
     echo "Error: Target directory not found: ${TARGET_DIR}"
     echo ""
-    echo "Create it with: mkdir -p targets/${TARGET}"
+    echo "Create it with:"
+    if [ "$TARGETS_DIR" = "$(pwd)/targets" ]; then
+        echo "  mkdir -p ./targets/${TARGET}"
+    else
+        echo "  mkdir -p ~/.shipd/targets/${TARGET}"
+    fi
     echo ""
     list_targets
     exit 1
 fi
 
 # Load global config if it exists (defaults)
-if [ -f "${SCRIPT_DIR}/.config" ]; then
-    source "${SCRIPT_DIR}/.config"
+GLOBAL_CONFIG=$(find_global_config)
+if [ -n "$GLOBAL_CONFIG" ]; then
+    source "$GLOBAL_CONFIG"
 fi
 
 # Load target-specific config (overrides global)
@@ -343,19 +401,19 @@ export FORCE_DEPLOY
 # Delegate to appropriate deployment module
 if [ "$USE_CADDY" = "true" ]; then
     # Zero-downtime deployment via Caddy (single-container only)
-    source "${SCRIPT_DIR}/lib/deploy-caddy.sh"
+    source "${LIB_DIR}/deploy-caddy.sh"
     deploy_with_caddy
 elif [ "$DEPLOY_MODE" = "compose" ]; then
     # Docker Compose deployment
-    source "${SCRIPT_DIR}/lib/deploy-docker.sh"
+    source "${LIB_DIR}/deploy-docker.sh"
     deploy_docker_compose
 elif [ "$ENGINE" = "docker" ]; then
     # Docker single-container deployment
-    source "${SCRIPT_DIR}/lib/deploy-docker.sh"
+    source "${LIB_DIR}/deploy-docker.sh"
     deploy_docker_single
 elif [ "$ENGINE" = "podman" ]; then
     # Podman single-container deployment
-    source "${SCRIPT_DIR}/lib/deploy-podman.sh"
+    source "${LIB_DIR}/deploy-podman.sh"
     deploy_with_podman
 else
     echo "Error: Unknown engine: ${ENGINE}"

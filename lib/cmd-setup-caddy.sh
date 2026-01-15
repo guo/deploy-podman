@@ -2,12 +2,32 @@
 
 set -e
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detect lib directory (not used here, but for consistency)
+if [ -d "/opt/homebrew/lib/shipd" ] && [ ! -d "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib" ]; then
+    # Homebrew (Apple Silicon)
+    LIB_DIR="/opt/homebrew/lib/shipd"
+elif [ -d "/usr/local/lib/shipd" ] && [ ! -d "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib" ]; then
+    # Homebrew (Intel) or manual install
+    LIB_DIR="/usr/local/lib/shipd"
+else
+    # Development mode
+    LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+# Find targets directory (search current dir, then home dir)
+find_targets_dir() {
+    if [ -d "./targets" ]; then
+        echo "$(pwd)/targets"
+    elif [ -d "$HOME/.shipd/targets" ]; then
+        echo "$HOME/.shipd/targets"
+    else
+        echo ""
+    fi
+}
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 <target>"
+    echo "Usage: shipd setup-caddy <target>"
     echo ""
     echo "Setup Caddy reverse proxy for a deployment target."
     echo ""
@@ -15,7 +35,7 @@ show_usage() {
     echo "  target      Target name (e.g., myapp-prod)"
     echo ""
     echo "Examples:"
-    echo "  $0 myapp-prod"
+    echo "  shipd setup-caddy myapp-prod"
     echo ""
     echo "This will:"
     echo "  1. Create Caddyfile for the target"
@@ -31,11 +51,35 @@ if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
 fi
 
 TARGET="$1"
-TARGET_DIR="${SCRIPT_DIR}/targets/${TARGET}"
+
+# Find targets directory and locate target
+TARGETS_DIR=$(find_targets_dir)
+if [ -z "$TARGETS_DIR" ]; then
+    echo "Error: No targets directory found"
+    echo ""
+    echo "Searched locations:"
+    echo "  - ./targets/"
+    echo "  - ~/.shipd/targets/"
+    echo ""
+    echo "Create one with:"
+    echo "  mkdir -p ./targets/${TARGET}"
+    echo "  or"
+    echo "  mkdir -p ~/.shipd/targets/${TARGET}"
+    exit 1
+fi
+
+TARGET_DIR="${TARGETS_DIR}/${TARGET}"
 
 # Verify target directory exists
 if [ ! -d "$TARGET_DIR" ]; then
     echo "Error: Target directory not found: ${TARGET_DIR}"
+    echo ""
+    echo "Create it with:"
+    if [ "$TARGETS_DIR" = "$(pwd)/targets" ]; then
+        echo "  mkdir -p ./targets/${TARGET}"
+    else
+        echo "  mkdir -p ~/.shipd/targets/${TARGET}"
+    fi
     exit 1
 fi
 
@@ -173,7 +217,7 @@ echo "Proxying to: localhost:${APP_PORT}"
 echo ""
 echo "Next steps:"
 echo "  1. Enable zero-downtime: Add USE_CADDY=\"true\" to targets/${TARGET}/.config"
-echo "  2. Deploy your application: ./deploy.sh ${TARGET}"
+echo "  2. Deploy your application: shipd deploy ${TARGET}"
 echo "  3. View Caddy logs: ssh ${SSH_HOST} 'podman logs -f ${CADDY_CONTAINER}'"
 echo "  4. Update Caddyfile: Edit on server at ${CADDYFILE_PATH}"
 echo "  5. Reload Caddy: ssh ${SSH_HOST} 'podman exec ${CADDY_CONTAINER} caddy reload --config /etc/caddy/Caddyfile'"

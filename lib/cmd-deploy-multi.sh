@@ -2,8 +2,20 @@
 
 set -e
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detect mode and find shipd command
+SCRIPT_DIR_TMP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "${SCRIPT_DIR_TMP}/lib" ]; then
+    # Development mode
+    SHIPD_CMD="${SCRIPT_DIR_TMP}/shipd.sh"
+    LOG_DIR="${SCRIPT_DIR_TMP}"
+elif command -v shipd >/dev/null 2>&1; then
+    # Installed mode (Homebrew or manual) - use shipd from PATH
+    SHIPD_CMD="shipd"
+    LOG_DIR="$(pwd)"
+else
+    echo "Error: Cannot find shipd command"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -18,22 +30,37 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+# Find targets directory (search current dir, then home dir)
+find_targets_dir() {
+    if [ -d "./targets" ]; then
+        echo "$(pwd)/targets"
+    elif [ -d "$HOME/.shipd/targets" ]; then
+        echo "$HOME/.shipd/targets"
+    else
+        echo ""
+    fi
+}
+
 # Check if targets directory exists
-if [ ! -d "${SCRIPT_DIR}/targets" ]; then
-    print_error "targets/ directory not found in ${SCRIPT_DIR}"
+TARGETS_DIR=$(find_targets_dir)
+if [ -z "$TARGETS_DIR" ]; then
+    print_error "targets/ directory not found"
+    echo ""
+    echo "Searched locations:"
+    echo "  - ./targets/"
+    echo "  - ~/.shipd/targets/"
     echo ""
     echo "Please create target directories first:"
-    echo "  1. mkdir -p targets/myapp"
-    echo "  2. cp .config.example targets/myapp/.config"
-    echo "  3. cp env.example targets/myapp/.env"
-    echo "  4. Edit the config and env files"
+    echo "  mkdir -p ./targets/myapp"
+    echo "  or"
+    echo "  mkdir -p ~/.shipd/targets/myapp"
     echo ""
     exit 1
 fi
 
 # Function to get all targets from targets directory
 get_targets() {
-    for dir in "${SCRIPT_DIR}/targets"/*/ ; do
+    for dir in "$TARGETS_DIR"/*/ ; do
         if [ -d "$dir" ]; then
             basename "$dir"
         fi
@@ -42,7 +69,7 @@ get_targets() {
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 [OPTIONS] <TARGETS...>"
+    echo "Usage: shipd deploy-multi [OPTIONS] <TARGETS...>"
     echo ""
     echo "Deploy to multiple targets"
     echo ""
@@ -53,10 +80,10 @@ show_usage() {
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 --all                     # Deploy to all targets (with confirmation)"
-    echo "  $0 --all --parallel          # Deploy to all targets in parallel"
-    echo "  $0 staging production        # Deploy to staging and production"
-    echo "  $0 -p staging production     # Deploy to staging and production in parallel"
+    echo "  shipd deploy-multi --all                     # Deploy to all targets (with confirmation)"
+    echo "  shipd deploy-multi --all --parallel          # Deploy to all targets in parallel"
+    echo "  shipd deploy-multi staging production        # Deploy to staging and production"
+    echo "  shipd deploy-multi -p staging production     # Deploy to staging and production in parallel"
     echo ""
     echo "Available targets:"
     get_targets | sed 's/^/  - /'
@@ -135,16 +162,16 @@ DEPLOYMENT_PIDS=()
 # Function to deploy to a single target
 deploy_target() {
     local target=$1
-    local log_file="${SCRIPT_DIR}/deploy-${target}.log"
+    local log_file="${LOG_DIR}/deploy-${target}.log"
 
     print_info "Starting deployment to ${target}..."
 
-    if "${SCRIPT_DIR}/deploy.sh" "$target" 2>&1 | tee "$log_file"; then
-        echo "SUCCESS" > "${SCRIPT_DIR}/.deploy-${target}.result"
+    if "${SHIPD_CMD}" deploy "$target" 2>&1 | tee "$log_file"; then
+        echo "SUCCESS" > "${LOG_DIR}/.deploy-${target}.result"
         print_success "Deployment to ${target} completed successfully"
         return 0
     else
-        echo "FAILED" > "${SCRIPT_DIR}/.deploy-${target}.result"
+        echo "FAILED" > "${LOG_DIR}/.deploy-${target}.result"
         print_error "Deployment to ${target} failed (see ${log_file} for details)"
         return 1
     fi
@@ -193,7 +220,7 @@ SUCCESS_COUNT=0
 FAILED_COUNT=0
 
 for target in "${TARGETS[@]}"; do
-    result_file="${SCRIPT_DIR}/.deploy-${target}.result"
+    result_file="${LOG_DIR}/.deploy-${target}.result"
     if [ -f "$result_file" ] && [ "$(cat "$result_file")" = "SUCCESS" ]; then
         echo -e "  ${GREEN}✓${NC} ${target}"
         ((SUCCESS_COUNT++))

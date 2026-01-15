@@ -67,11 +67,25 @@ The deployment system uses a simple directory-based structure:
 
 ### Script Architecture
 
-- **deploy.sh** - Main unified deployment script
+- **shipd.sh** - Main CLI entry point with subcommand dispatcher
+  - Modern CLI with subcommands: `deploy`, `deploy-multi`, `setup-caddy`
+  - Shows help and version information
+  - Delegates to command modules in `lib/` directory
+
+- **lib/cmd-deploy.sh** - Main unified deployment command
   - Auto-detects deployment mode (single vs compose) and engine (Docker vs Podman)
   - Supports zero-downtime deployment via USE_CADDY configuration flag
   - Single entry point for all deployments
   - Delegates to modular implementations in `lib/` directory
+
+- **lib/cmd-deploy-multi.sh** - Batch deployment command
+  - Discovers targets from `targets/` directory structure
+  - Supports sequential or parallel deployment modes
+  - Tracks success/failure per target
+
+- **lib/cmd-setup-caddy.sh** - Caddy reverse proxy setup command
+  - One-time setup per target
+  - Creates Caddy container and configuration
 
 - **lib/deploy-podman.sh** - Podman single-container deployment module
   - Standard deployment with brief downtime
@@ -122,26 +136,10 @@ The deployment system uses a simple directory-based structure:
 
 **Note:** Standard deployment methods have brief downtime. Use USE_CADDY="true" for zero-downtime.
 
-- **setup-caddy.sh** - One-time Caddy reverse proxy setup per target
-  - Creates Caddy container per target: `caddy-{target}`
-  - Generates Caddyfile with automatic HTTPS (Let's Encrypt)
-  - Configures reverse proxy to application container
-  - Mounts Caddyfile and certificate storage volumes
-  - Exposes ports 80/443 on Caddy container
-  - **Usage:** `./setup-caddy.sh <target>` (run once per target)
-
-- **deploy-multi.sh** - Batch deployment wrapper
-  - Discovers targets from `targets/` directory structure
-  - Requires either `--all` flag or explicit target names (no default behavior)
-  - `--all` flag lists all targets and requires confirmation before deploying
-  - Supports sequential (default) or parallel (`--parallel`) deployment modes
-  - Creates per-target log files: `deploy-{target}.log`
-  - Uses background processes for parallel execution with wait/trap for synchronization
-  - Tracks success/failure via temporary `.deploy-{target}.result` files
 
 ### Deployment Strategy Selection
 
-**Use deploy.sh for all deployments** (unified command):
+**Use `shipd deploy` for all deployments** (unified command):
 
 **With USE_CADDY="false"** (default - brief downtime):
 - Development/staging environments where brief downtime is acceptable
@@ -253,13 +251,13 @@ volumes:
 **Deployment**:
 ```bash
 # Deploy with latest tag
-./deploy.sh myapp-prod
+shipd deploy myapp-prod
 
 # Deploy specific version
-./deploy.sh myapp-prod v1.2.3
+shipd deploy myapp-prod v1.2.3
 
 # Multi-target deploy (supports both single and compose targets)
-./deploy-multi.sh --all
+shipd deploy-multi --all
 ```
 
 **Limitations**:
@@ -299,37 +297,37 @@ echo 'FILE_MAPPINGS="config.json:/app/config.json"' >> targets/myapp-prod/.confi
 #### Quick Start (Brief Downtime - Default)
 ```bash
 # Deploy latest image
-./deploy.sh myapp-prod
+shipd deploy myapp-prod
 
 # Deploy specific version
-./deploy.sh myapp-prod v1.2.3
+shipd deploy myapp-prod v1.2.3
 
 # Deploy specific commit
-./deploy.sh myapp-prod sha-abc123
+shipd deploy myapp-prod sha-abc123
 
 # Deploy to all targets (lists all and asks for confirmation)
-./deploy-multi.sh --all
+shipd deploy-multi --all
 
 # Deploy to all targets in parallel
-./deploy-multi.sh --all --parallel
+shipd deploy-multi --all --parallel
 
 # List available targets
-./deploy.sh --help
+shipd deploy --help
 ```
 
 #### Zero-Downtime Deployment (Production)
 ```bash
 # 1. First-time setup (run once per target)
-./setup-caddy.sh myapp-prod
+shipd setup-caddy myapp-prod
 
 # 2. Enable Caddy in target configuration
 echo 'USE_CADDY="true"' >> targets/myapp-prod/.config
 # Also add: DOMAIN, APP_PORT, HEALTH_CHECK_PATH, HEALTH_CHECK_TIMEOUT
 
 # 3. Deploy with zero-downtime (same command!)
-./deploy.sh myapp-prod           # Deploy latest
-./deploy.sh myapp-prod v1.2.3    # Deploy specific version
-./deploy.sh myapp-prod v1.2.2    # Rollback to previous version
+shipd deploy myapp-prod           # Deploy latest
+shipd deploy myapp-prod v1.2.3    # Deploy specific version
+shipd deploy myapp-prod v1.2.2    # Rollback to previous version
 ```
 
 **Configuration requirements for USE_CADDY:**
