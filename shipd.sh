@@ -80,8 +80,8 @@ show_help() {
     echo "    shipd setup-caddy --help"
     echo ""
     echo -e "${BOLD}MORE INFO:${NC}"
-    echo "    Documentation: https://github.com/yourusername/shipd"
-    echo "    Report issues: https://github.com/yourusername/shipd/issues"
+    echo "    Documentation: https://github.com/guo/shipd"
+    echo "    Report issues: https://github.com/guo/shipd/issues"
     echo ""
 }
 
