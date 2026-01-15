@@ -16,14 +16,14 @@ git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 
 # GitHub will automatically create a tarball at:
-# https://github.com/yourusername/shipd/archive/refs/tags/v1.0.0.tar.gz
+# https://github.com/guo/shipd/archive/refs/tags/v1.0.0.tar.gz
 ```
 
 ## Step 2: Calculate SHA256
 
 ```bash
 # Download and calculate checksum
-curl -sL https://github.com/yourusername/shipd/archive/refs/tags/v1.0.0.tar.gz | shasum -a 256
+curl -sL https://github.com/guo/shipd/archive/refs/tags/v1.0.0.tar.gz | shasum -a 256
 ```
 
 Copy the SHA256 hash - you'll need it for the formula.
@@ -35,8 +35,8 @@ Edit `shipd.rb`:
 ```ruby
 class Shipd < Formula
   desc "Container deployment automation tool for Docker and Podman"
-  homepage "https://github.com/yourusername/shipd"
-  url "https://github.com/yourusername/shipd/archive/refs/tags/v1.0.0.tar.gz"
+  homepage "https://github.com/guo/shipd"
+  url "https://github.com/guo/shipd/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "PASTE_YOUR_SHA256_HERE"  # From step 2
   license "MIT"
   # ... rest of formula
@@ -67,7 +67,7 @@ Create your own tap (GitHub repo) to host the formula:
 # Repository name MUST be: homebrew-tap
 
 # Add formula to repo
-git clone https://github.com/yourusername/homebrew-tap
+git clone https://github.com/guo/homebrew-tap
 cd homebrew-tap
 cp /path/to/shipd/shipd.rb Formula/shipd.rb
 git add Formula/shipd.rb
@@ -77,7 +77,7 @@ git push
 
 **Users install with:**
 ```bash
-brew tap yourusername/tap
+brew tap guo/tap
 brew install shipd
 ```
 
@@ -122,7 +122,7 @@ When releasing a new version:
 2. Calculate new SHA256
 3. Update formula:
    ```ruby
-   url "https://github.com/yourusername/shipd/archive/refs/tags/v1.1.0.tar.gz"
+   url "https://github.com/guo/shipd/archive/refs/tags/v1.1.0.tar.gz"
    sha256 "NEW_SHA256_HERE"
    ```
 4. Commit and push to tap repository

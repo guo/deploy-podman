@@ -12,7 +12,7 @@ Shipd supports two installation methods: **Homebrew** (recommended) and **Manual
 
 ```bash
 # Install from Homebrew tap
-brew tap yourusername/tap
+brew tap guo/tap
 brew install shipd
 
 # Verify installation
@@ -45,7 +45,7 @@ brew uninstall shipd
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/shipd.git
+git clone https://github.com/guo/shipd.git
 cd shipd
 
 # Run the install script
