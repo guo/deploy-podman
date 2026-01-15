@@ -161,6 +161,22 @@ All methods automate:
 - Sudo privileges on remote hosts (for Podman installation)
 - GitHub Container Registry credentials (or use public images)
 
+## GitHub Actions Integration
+
+Use Shipd in CI/CD pipelines for automated deployments:
+
+- 📖 **[GitHub Actions Guide](docs/GITHUB_ACTIONS.md)** - Complete CI/CD integration guide
+- 📄 **[Workflow Example](.github/workflows/deploy.yml.example)** - Ready-to-use workflow template
+
+Quick example:
+```yaml
+- name: Deploy
+  run: |
+    curl -L https://github.com/guo/shipd/archive/refs/tags/v1.0.3.tar.gz | tar xz
+    cd shipd-1.0.3 && sudo ./install.sh
+    shipd deploy -y production ${{ github.ref_name }}
+```
+
 ## Initial Setup
 
 ### Option 1: Project-Local Targets (Development)

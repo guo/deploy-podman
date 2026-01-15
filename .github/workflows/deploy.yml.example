@@ -1,0 +1,82 @@
+name: Deploy with Shipd
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to deploy'
+        required: true
+        type: choice
+        options:
+          - myapp-prod
+          - myapp-staging
+      image_tag:
+        description: 'Image tag to deploy'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Shipd
+        run: |
+          # Download and install shipd
+          curl -L https://github.com/guo/shipd/archive/refs/tags/v1.0.3.tar.gz | tar xz
+          cd shipd-1.0.3
+          sudo ./install.sh
+          shipd --version
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Add SSH config
+          cat >> ~/.ssh/config <<EOF
+          Host *
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+
+      - name: Setup deployment target
+        run: |
+          # Create target directory
+          mkdir -p ~/.shipd/targets/${{ inputs.target || 'myapp-prod' }}
+
+          # Create .config from secrets
+          cat > ~/.shipd/targets/${{ inputs.target || 'myapp-prod' }}/.config <<EOF
+          CONTAINER_IMAGE="${{ secrets.CONTAINER_IMAGE }}"
+          SSH_HOST="${{ secrets.SSH_HOST }}"
+          CONTAINER_NAME="${{ secrets.CONTAINER_NAME }}"
+          PORT_MAPPINGS="${{ secrets.PORT_MAPPINGS }}"
+          GHCR_USERNAME="${{ secrets.GHCR_USERNAME }}"
+          GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
+          EOF
+
+          # Create .env from secrets
+          echo "${{ secrets.ENV_FILE }}" > ~/.shipd/targets/${{ inputs.target || 'myapp-prod' }}/.env
+
+      - name: Deploy
+        run: |
+          TAG="${{ inputs.image_tag || github.ref_name }}"
+          TARGET="${{ inputs.target || 'myapp-prod' }}"
+
+          # Deploy with auto-confirm
+          shipd deploy -y "$TARGET" "$TAG"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
