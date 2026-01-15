@@ -107,21 +107,31 @@ else
     echo ""
 fi
 
+# Update version in shipd.sh
+echo ""
+echo -e "${BLUE}[1/5] Updating version in shipd.sh...${NC}"
+sed -i.bak "s/VERSION=\"[0-9]*\.[0-9]*\.[0-9]*\"/VERSION=\"${VERSION}\"/" "${SCRIPT_DIR}/shipd.sh"
+rm -f "${SCRIPT_DIR}/shipd.sh.bak"
+git add "${SCRIPT_DIR}/shipd.sh"
+git commit -m "Bump version to ${VERSION}"
+git push
+echo -e "${GREEN}✓ Version updated and committed${NC}"
+
 # Create tag
 echo ""
-echo -e "${BLUE}[1/4] Creating Git tag...${NC}"
+echo -e "${BLUE}[2/5] Creating Git tag...${NC}"
 git tag -a "$TAG" -m "Release ${VERSION}"
 echo -e "${GREEN}✓ Tag created${NC}"
 
 # Push tag
 echo ""
-echo -e "${BLUE}[2/4] Pushing tag to GitHub...${NC}"
+echo -e "${BLUE}[3/5] Pushing tag to GitHub...${NC}"
 git push origin "$TAG"
 echo -e "${GREEN}✓ Tag pushed${NC}"
 
 # Wait for GitHub to generate tarball
 echo ""
-echo -e "${BLUE}[3/4] Waiting for GitHub to generate tarball...${NC}"
+echo -e "${BLUE}[4/5] Waiting for GitHub to generate tarball...${NC}"
 echo "Checking: ${TARBALL_URL}"
 for i in {1..10}; do
     if curl -sfL "$TARBALL_URL" >/dev/null; then
@@ -140,7 +150,7 @@ done
 
 # Calculate SHA256
 echo ""
-echo -e "${BLUE}[4/4] Calculating SHA256...${NC}"
+echo -e "${BLUE}[5/5] Calculating SHA256...${NC}"
 SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | cut -d' ' -f1)
 echo -e "${GREEN}✓ SHA256: ${SHA256}${NC}"
 
