@@ -1,4 +1,4 @@
-# Container Deployment Automation (Docker + Podman)
+# Shipd - Container Deployment Automation
 
 This repository contains automated deployment scripts for running containers across multiple servers/environments. Supports both **Docker** and **Podman** with automatic engine selection based on deployment type.
 
@@ -74,7 +74,7 @@ All methods automate:
 Each target is a directory under `targets/` with its own configuration:
 
 ```
-deploy-podman/
+shipd/
 ├── .config                      # Optional: global defaults
 ├── .config.example              # Template for configuration
 ├── targets/
