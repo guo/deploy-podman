@@ -1,6 +1,129 @@
 # Shipd - Container Deployment Automation
 
-This repository contains automated deployment scripts for running containers across multiple servers/environments. Supports both **Docker** and **Podman** with automatic engine selection based on deployment type.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/release/guo/shipd.svg)](https://github.com/guo/shipd/releases)
+[![Homebrew](https://img.shields.io/badge/homebrew-available-blue.svg)](https://github.com/guo/homebrew-tap)
+
+**Deploy containers to your servers from your laptop. No platform to install. Just SSH and go.**
+
+Agentless container deployment for teams who don't need Kubernetes. Deploy remotely via SSH - your servers stay clean and simple, running only Docker/Podman. Zero-downtime deployments, multi-environment management, and Docker Compose support built-in.
+
+## Why Shipd?
+
+**Perfect for:**
+- Small to medium teams running 5-50 services
+- Deploying to VPS (DigitalOcean, Hetzner, AWS EC2)
+- Projects that don't need Kubernetes complexity
+- Teams who want simple, SSH-based deployments
+- **Cost-conscious teams** - 10x cheaper than PaaS for multiple apps
+- **Resource-constrained servers** - no platform overhead, fully utilize VPS capacity
+- Anyone who wants to keep servers manually accessible and portable
+
+**vs Kubernetes:** No cluster management, no YAML sprawl, no learning curve. Just SSH and containers.
+
+**vs Docker/Podman directly:** Automated image updates, zero-downtime deployments, multi-environment config, rollback support. Deploy remotely without logging into servers.
+
+**vs Ansible/Terraform:** Purpose-built for container deployments. Simpler config, faster iterations. No complex playbooks needed.
+
+**vs Dokku/CapRover:** Agentless - no platform software to install on servers. Just SSH and deploy. Server stays vanilla.
+
+**vs Platform-as-a-Service:** Keep full control. Deploy to your own servers. No vendor lock-in. **Much cheaper** - fully utilize your VPS capacity instead of paying per-app PaaS fees.
+
+## Key Features
+
+- **Agentless & Remote** - No software to install on servers. Deploy from your laptop via SSH. Server stays clean.
+- **Zero-downtime deployments** - Blue-green deployment with health checks via Caddy
+- **Multi-container stacks** - Full Docker Compose support for complex applications
+- **Multi-environment** - Manage production, staging, demo environments from one place
+- **Version control** - Deploy specific tags, rollback to previous versions instantly
+- **Auto-installation** - Installs Docker/Podman on remote servers automatically
+- **Flexible engines** - Use Docker or Podman (rootless by default)
+- **Simple config** - Bash variables, no complex YAML or infrastructure code
+- **GitHub Actions** - Ready-to-use CI/CD workflows included
+- **Works everywhere** - Any Linux server you can SSH into. No cloud vendor lock-in.
+
+## Quick Start
+
+```bash
+# Install
+brew tap guo/tap
+brew install shipd
+
+# Configure a deployment target
+mkdir -p ~/.shipd/targets/myapp-prod
+echo 'SSH_HOST="user@server.com"' > ~/.shipd/targets/myapp-prod/.config
+echo 'CONTAINER_IMAGE="ghcr.io/org/myapp"' >> ~/.shipd/targets/myapp-prod/.config
+echo 'PORT_MAPPINGS="80:3000"' >> ~/.shipd/targets/myapp-prod/.config
+
+# Create env file
+echo 'DATABASE_URL=...' > ~/.shipd/targets/myapp-prod/.env
+
+# Deploy
+shipd deploy myapp-prod           # Deploy latest
+shipd deploy myapp-prod v1.2.3    # Deploy specific version
+```
+
+That's it. No cluster setup, no complex YAML, just SSH and go.
+
+## What Makes Shipd Different?
+
+**Agentless Architecture** - Your servers stay clean and simple:
+
+- ✅ No platform software to install (unlike Dokku, CapRover, Coolify)
+- ✅ No agents or daemons running (unlike many deployment tools)
+- ✅ **Minimal resource usage** - no platform overhead, just your containers
+- ✅ Deploy from anywhere with SSH access (laptop, CI/CD, another server)
+- ✅ Server just runs Docker/Podman - nothing else
+- ✅ **Manually maintainable** - can SSH in and use standard docker/podman commands anytime
+- ✅ No maintenance overhead - SSH + containers is all you need
+- ✅ Easy to debug - everything is standard Docker/Podman commands
+- ✅ **No proprietary layer** - never locked out of your own server
+
+**Before Shipd:**
+```bash
+# SSH into each server
+ssh prod-server
+cd /app
+docker pull myapp:latest
+docker stop myapp
+docker rm myapp
+docker run -d --name myapp ...
+exit
+
+# Repeat for staging, demo, etc.
+```
+
+**With Shipd:**
+```bash
+# Deploy from your laptop to all environments
+shipd deploy myapp-prod v1.2.3
+shipd deploy myapp-staging v1.2.3
+shipd deploy myapp-demo v1.2.3
+```
+
+No logging in. No manual commands. No forgetting steps.
+
+**Server Resource Usage:**
+
+| Tool | What Runs on Server | Typical RAM Usage | $20/mo VPS Usable RAM* |
+|------|---------------------|-------------------|----------------------|
+| Shipd | Just your containers | 0 MB overhead | ~3.8 GB (95%) |
+| Dokku | Platform + Nginx + your containers | ~150-300 MB | ~3.5 GB (87%) |
+| CapRover | Platform + Web UI + your containers | ~200-400 MB | ~3.4 GB (85%) |
+| Kubernetes | Control plane + agents + your containers | ~500-1000 MB | ~3.0 GB (75%) |
+
+_*Based on 4GB VPS from DigitalOcean/Hetzner_
+
+**Cost Comparison:**
+
+Run 3 small apps on one server:
+- **Shipd + $20/mo VPS** = $20/month total
+- **Heroku/Render** = ~$21-75/month (3 apps × $7-25 each)
+- **Fly.io/Railway** = ~$15-45/month
+
+**Fully utilize your VPS capacity.** No platform overhead means more RAM for your apps. No PaaS lock-in means you can switch providers anytime.
+
+**Plus with Shipd:** You can always SSH in and use standard `docker ps`, `docker logs`, `docker exec` commands. No proprietary platform layer blocking you.
 
 ## Installation
 
