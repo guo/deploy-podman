@@ -2,9 +2,13 @@
 .env
 .env.*
 targets.config
+.config
 
 # Container directories (contain sensitive config files)
 targets/
+
+# Homebrew formula (maintained in homebrew-tap only)
+shipd.rb
 
 # Logs
 *.log
