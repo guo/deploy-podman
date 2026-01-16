@@ -1,8 +1,8 @@
 class Shipd < Formula
   desc "Container deployment automation tool for Docker and Podman"
   homepage "https://github.com/guo/shipd"
-  url "https://github.com/guo/shipd/archive/refs/tags/v1.0.3.tar.gz"
-  sha256 "bf88cc8eb3f2b84491ee38064c8bbaa3a21da6fd16a46899efde727fcad0a548"
+  url "https://github.com/guo/shipd/archive/refs/tags/v1.0.4.tar.gz"
+  sha256 "d6a36be4c6fd3c8c8b4551596332813ef46b592c93b07861c8cec8d017a61895"
   license "MIT"
 
   def install
