@@ -32,15 +32,26 @@ check_image_hash_changed() {
         return 0  # Deploy needed (safer to deploy if we can't check)
     fi
 
-    # Get target image digest (check if image exists locally on remote)
-    echo "  → Querying for target image digest..."
+    # Pull target image from registry to get latest digest
+    echo "  → Pulling target image to check for updates..."
+    local pull_output
+    pull_output=$(ssh ${SSH_HOST} "$engine pull $target_image 2>&1")
+    local pull_exit_code=$?
+
+    if [ $pull_exit_code -ne 0 ]; then
+        echo "  → Failed to pull image from registry"
+        echo "  → Pull error: $pull_output"
+        return 0  # Deploy needed (safer to proceed if we can't check)
+    fi
+
+    # Get target image digest after pull
+    echo "  → Getting target image digest..."
     local target_digest
     target_digest=$(ssh ${SSH_HOST} "$engine inspect --format='{{.Id}}' $target_image 2>/dev/null || echo ''")
 
-    # If target image not cached locally, we need to pull to check
     if [ -z "$target_digest" ]; then
-        echo "  → Target image not cached locally, will pull to check"
-        return 0  # Deploy needed (must pull to get new image)
+        echo "  → Could not get target image digest after pull"
+        return 0  # Deploy needed (safer to deploy if we can't check)
     fi
 
     # Compare digests
@@ -115,12 +126,23 @@ check_compose_images_changed() {
             continue
         fi
 
+        # Pull the image to check for updates
+        echo "    Pulling $current_image to check for updates..."
+        ssh ${SSH_HOST} "docker pull $current_image 2>&1" > /dev/null
+        local pull_exit_code=$?
+
+        if [ $pull_exit_code -ne 0 ]; then
+            echo "    Failed to pull image"
+            any_changed=true
+            continue
+        fi
+
         # Get the latest pulled image digest for the same image name
         local target_digest
         target_digest=$(ssh ${SSH_HOST} "docker inspect --format='{{.Id}}' '$current_image' 2>/dev/null || echo ''")
 
         if [ -z "$target_digest" ]; then
-            echo "    Target image not found"
+            echo "    Target image not found after pull"
             any_changed=true
             continue
         fi
