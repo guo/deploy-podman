@@ -175,10 +175,18 @@ deploy_docker_single() {
     echo "Target: ${TARGET}"
     echo "Container: ${CONTAINER_NAME}"
     echo "Image: ${FULL_IMAGE}"
-    IMAGE_DIGEST=$(ssh ${SSH_HOST} "docker inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
-    if [ -n "$IMAGE_DIGEST" ]; then
-        echo "Image Digest: ${IMAGE_DIGEST}"
+
+    # Get image ID and registry digest
+    IMAGE_ID=$(ssh ${SSH_HOST} "docker inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null || echo "")
+    if [ -n "$IMAGE_ID" ]; then
+        echo "Image ID: ${IMAGE_ID:0:12}"
     fi
+
+    REGISTRY_DIGEST=$(ssh ${SSH_HOST} "docker inspect ${FULL_IMAGE} --format='{{.RepoDigests}}' 2>/dev/null | grep -oE 'sha256:[a-f0-9]{64}' | head -1" || echo "")
+    if [ -n "$REGISTRY_DIGEST" ]; then
+        echo "Registry Digest: ${REGISTRY_DIGEST}"
+    fi
+
     if [ -n "$PORT_MAPPINGS" ]; then
         echo "Ports: ${PORT_MAPPINGS}"
     fi
@@ -302,14 +310,23 @@ deploy_docker_compose() {
     echo "Compose File: ${COMPOSE_FILE}"
     echo "Image Tag: ${IMAGE_TAG}"
     echo ""
-    echo "Deployed Image Digests:"
+    echo "Deployed Services:"
     ssh ${SSH_HOST} "cd ${REMOTE_BASE_DIR} && docker compose -f ${COMPOSE_FILE} ps --format json" | while read -r line; do
         container_name=$(echo "$line" | grep -o '"Name":"[^"]*' | cut -d'"' -f4)
         if [ -n "$container_name" ]; then
-            digest=$(ssh ${SSH_HOST} "docker inspect $container_name --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
             image=$(ssh ${SSH_HOST} "docker inspect $container_name --format='{{index .Config.Image}}'" 2>/dev/null)
-            if [ -n "$digest" ] && [ -n "$image" ]; then
-                echo "  $container_name: $image ($digest)"
+            image_id=$(ssh ${SSH_HOST} "docker inspect $container_name --format='{{.Image}}'" 2>/dev/null | cut -c1-12)
+            registry_digest=$(ssh ${SSH_HOST} "docker inspect $image --format='{{.RepoDigests}}' 2>/dev/null | grep -oE 'sha256:[a-f0-9]{12}' | head -1" 2>/dev/null || echo "")
+
+            if [ -n "$image" ]; then
+                echo "  Service: $container_name"
+                echo "    Image: $image"
+                if [ -n "$image_id" ]; then
+                    echo "    Image ID: $image_id"
+                fi
+                if [ -n "$registry_digest" ]; then
+                    echo "    Registry Digest: ${registry_digest}..."
+                fi
             fi
         fi
     done

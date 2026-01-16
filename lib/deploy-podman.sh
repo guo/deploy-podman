@@ -201,10 +201,18 @@ deploy_with_podman() {
     echo "Target: ${TARGET}"
     echo "Container: ${CONTAINER_NAME}"
     echo "Image: ${FULL_IMAGE}"
-    IMAGE_DIGEST=$(ssh ${SSH_HOST} "podman inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null | cut -c8-19)
-    if [ -n "$IMAGE_DIGEST" ]; then
-        echo "Image Digest: ${IMAGE_DIGEST}"
+
+    # Get image ID and registry digest
+    IMAGE_ID=$(ssh ${SSH_HOST} "podman inspect ${CONTAINER_NAME} --format='{{.Image}}'" 2>/dev/null || echo "")
+    if [ -n "$IMAGE_ID" ]; then
+        echo "Image ID: ${IMAGE_ID:0:12}"
     fi
+
+    REGISTRY_DIGEST=$(ssh ${SSH_HOST} "podman inspect ${FULL_IMAGE} --format='{{.RepoDigests}}' 2>/dev/null | grep -oE 'sha256:[a-f0-9]{64}' | head -1" || echo "")
+    if [ -n "$REGISTRY_DIGEST" ]; then
+        echo "Registry Digest: ${REGISTRY_DIGEST}"
+    fi
+
     if [ -n "$PORT_MAPPINGS" ]; then
         echo "Ports: ${PORT_MAPPINGS}"
     fi

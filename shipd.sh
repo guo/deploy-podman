@@ -50,6 +50,7 @@ show_help() {
     echo -e "    ${CYAN}deploy${NC}         Deploy a single target"
     echo -e "    ${CYAN}deploy-multi${NC}   Deploy to multiple targets"
     echo -e "    ${CYAN}setup-caddy${NC}    Setup Caddy reverse proxy for a target"
+    echo -e "    ${CYAN}inspect${NC}        Inspect a deployed container's runtime info"
     echo ""
     echo -e "${BOLD}OPTIONS:${NC}"
     echo "    -h, --help     Show help for a command"
@@ -74,10 +75,14 @@ show_help() {
     echo "    # Setup Caddy for zero-downtime deployments"
     echo "    shipd setup-caddy myapp-prod"
     echo ""
+    echo "    # Inspect a deployed container"
+    echo "    shipd inspect depinscan"
+    echo ""
     echo -e "${BOLD}GET HELP:${NC}"
     echo "    shipd deploy --help"
     echo "    shipd deploy-multi --help"
     echo "    shipd setup-caddy --help"
+    echo "    shipd inspect --help"
     echo ""
     echo -e "${BOLD}MORE INFO:${NC}"
     echo "    Documentation: https://github.com/guo/shipd"
@@ -103,6 +108,10 @@ case "${1:-}" in
     setup-caddy)
         shift
         exec "${LIB_DIR}/cmd-setup-caddy.sh" "$@"
+        ;;
+    inspect)
+        shift
+        exec "${LIB_DIR}/cmd-inspect.sh" "$@"
         ;;
     -v|--version|version)
         show_version
