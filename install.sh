@@ -45,6 +45,7 @@ sudo cp "${SCRIPT_DIR}/lib/deploy-podman.sh" /usr/local/lib/shipd/
 sudo cp "${SCRIPT_DIR}/lib/deploy-docker.sh" /usr/local/lib/shipd/
 sudo cp "${SCRIPT_DIR}/lib/deploy-caddy.sh" /usr/local/lib/shipd/
 sudo cp "${SCRIPT_DIR}/lib/hash-check.sh" /usr/local/lib/shipd/
+sudo cp "${SCRIPT_DIR}/lib/file-diff.sh" /usr/local/lib/shipd/
 sudo chmod +x /usr/local/lib/shipd/*.sh
 echo "✓ Libraries installed to /usr/local/lib/shipd/"
 echo ""

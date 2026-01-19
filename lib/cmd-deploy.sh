@@ -383,17 +383,11 @@ if [ "$REMOTE_DIR_EXISTS" = "no" ]; then
     echo ""
 fi
 
-# Upload target directory to remote host
-echo "Uploading target files..."
-# Ensure the remote directory exists
-ssh ${SSH_HOST} "mkdir -p ${REMOTE_BASE_DIR}"
-# Upload all files from target directory (including hidden files)
-shopt -s dotglob  # Enable matching hidden files
-scp -r "${TARGET_DIR}/"* ${SSH_HOST}:${REMOTE_BASE_DIR}/ 2>/dev/null || \
-    echo "Warning: No files to upload (this is normal if directory is empty)"
-shopt -u dotglob  # Disable dotglob
-echo "✓ Target files uploaded to ${REMOTE_BASE_DIR}"
-echo ""
+# Source file comparison module
+source "${LIB_DIR}/file-diff.sh"
+
+# Smart upload with per-file comparison
+smart_upload_files "$TARGET_DIR" "$SSH_HOST" "$REMOTE_BASE_DIR" "$AUTO_CONFIRM"
 
 # Export FORCE_DEPLOY for deployment modules
 export FORCE_DEPLOY
