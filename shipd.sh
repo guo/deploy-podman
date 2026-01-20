@@ -50,6 +50,7 @@ show_help() {
     echo -e "    ${CYAN}deploy${NC}         Deploy a single target"
     echo -e "    ${CYAN}deploy-multi${NC}   Deploy to multiple targets"
     echo -e "    ${CYAN}setup-caddy${NC}    Setup Caddy reverse proxy for a target"
+    echo -e "    ${CYAN}setup-rsync${NC}    Install rsync on remote server"
     echo -e "    ${CYAN}inspect${NC}        Inspect a deployed container's runtime info"
     echo ""
     echo -e "${BOLD}OPTIONS:${NC}"
@@ -75,6 +76,9 @@ show_help() {
     echo "    # Setup Caddy for zero-downtime deployments"
     echo "    shipd setup-caddy myapp-prod"
     echo ""
+    echo "    # Install rsync on remote server for file comparison"
+    echo "    shipd setup-rsync myapp-prod"
+    echo ""
     echo "    # Inspect a deployed container"
     echo "    shipd inspect depinscan"
     echo ""
@@ -82,6 +86,7 @@ show_help() {
     echo "    shipd deploy --help"
     echo "    shipd deploy-multi --help"
     echo "    shipd setup-caddy --help"
+    echo "    shipd setup-rsync --help"
     echo "    shipd inspect --help"
     echo ""
     echo -e "${BOLD}MORE INFO:${NC}"
@@ -108,6 +113,10 @@ case "${1:-}" in
     setup-caddy)
         shift
         exec "${LIB_DIR}/cmd-setup-caddy.sh" "$@"
+        ;;
+    setup-rsync)
+        shift
+        exec "${LIB_DIR}/cmd-setup-rsync.sh" "$@"
         ;;
     inspect)
         shift

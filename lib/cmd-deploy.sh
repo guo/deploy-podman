@@ -69,6 +69,7 @@ list_targets() {
 # Parse flags
 AUTO_CONFIRM=false
 FORCE_DEPLOY=false
+DRY_RUN=false
 POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -81,6 +82,10 @@ while [[ $# -gt 0 ]]; do
             FORCE_DEPLOY=true
             shift
             ;;
+        -n|--dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: shipd deploy [OPTIONS] <target> [image-tag]"
             echo ""
@@ -89,9 +94,10 @@ while [[ $# -gt 0 ]]; do
             echo "Automatically selects Docker or Podman based on target configuration."
             echo ""
             echo "Options:"
-            echo "  -y, --yes     Auto-confirm deployment (skip confirmation prompt)"
-            echo "  -f, --force   Force deployment even if image hash unchanged"
-            echo "  -h, --help    Show this help message"
+            echo "  -y, --yes      Auto-confirm deployment (skip confirmation prompt)"
+            echo "  -f, --force    Force deployment even if image hash unchanged"
+            echo "  -n, --dry-run  Show what would be uploaded without making changes"
+            echo "  -h, --help     Show this help message"
             echo ""
             echo "Arguments:"
             echo "  target      Target name (e.g., myapp)"
@@ -109,6 +115,7 @@ while [[ $# -gt 0 ]]; do
             echo "  shipd deploy myapp -y           # Deploy latest with auto-confirm"
             echo "  shipd deploy -y myapp v1.2.3    # Deploy with auto-confirm"
             echo "  shipd deploy -f myapp           # Force deploy even if hash unchanged"
+            echo "  shipd deploy -n myapp           # Dry-run: show what would change"
             exit 0
             ;;
         *)
@@ -387,7 +394,63 @@ fi
 source "${LIB_DIR}/file-diff.sh"
 
 # Smart upload with per-file comparison
-smart_upload_files "$TARGET_DIR" "$SSH_HOST" "$REMOTE_BASE_DIR" "$AUTO_CONFIRM"
+smart_upload_files "$TARGET_DIR" "$SSH_HOST" "$REMOTE_BASE_DIR" "$AUTO_CONFIRM" "$DRY_RUN"
+
+# Stop here if dry-run mode
+if [ "$DRY_RUN" = "true" ]; then
+    echo ""
+    echo "========================================"
+    echo "Container Image Check"
+    echo "========================================"
+
+    if [ "$DEPLOY_MODE" = "single" ]; then
+        # Check current container status
+        CONTAINER_EXISTS=$(ssh $SSH_HOST "$ENGINE ps -a --format '{{.Names}}' 2>/dev/null | grep -c '^${CONTAINER_NAME}\$' || true")
+
+        if [ "$CONTAINER_EXISTS" = "0" ]; then
+            echo "Container:    ${CONTAINER_NAME} (not deployed yet)"
+            echo "Target image: ${FULL_IMAGE}"
+            echo "Status:       Would create new container"
+        else
+            # Get current image info
+            CURRENT_IMAGE=$(ssh $SSH_HOST "$ENGINE inspect ${CONTAINER_NAME} --format='{{.Config.Image}}' 2>/dev/null" || echo "unknown")
+            CURRENT_DIGEST=$(ssh $SSH_HOST "$ENGINE inspect ${CONTAINER_NAME} --format='{{.Image}}' 2>/dev/null" || echo "unknown")
+
+            echo "Container:      ${CONTAINER_NAME}"
+            echo "Current image:  ${CURRENT_IMAGE}"
+            echo "Current digest: ${CURRENT_DIGEST:0:19}..."
+            echo "Target image:   ${FULL_IMAGE}"
+
+            if [ "$CURRENT_IMAGE" = "$FULL_IMAGE" ]; then
+                echo "Status:         Image tag unchanged (may still have updates)"
+                echo "                Use 'shipd deploy' to pull latest and compare digests"
+            else
+                echo "Status:         Image tag differs - would update container"
+            fi
+        fi
+    elif [ "$DEPLOY_MODE" = "compose" ]; then
+        echo "Compose file: ${COMPOSE_FILE}"
+        echo "Image tag:    ${IMAGE_TAG}"
+
+        # Check if compose project is running
+        RUNNING_CONTAINERS=$(ssh $SSH_HOST "cd ${REMOTE_BASE_DIR} 2>/dev/null && docker compose ps -q 2>/dev/null | wc -l" || echo "0")
+
+        if [ "$RUNNING_CONTAINERS" = "0" ]; then
+            echo "Status:       No containers running (first deployment)"
+        else
+            echo "Status:       ${RUNNING_CONTAINERS} container(s) running"
+            echo "              Would pull images and recreate containers"
+        fi
+    fi
+
+    echo ""
+    echo "========================================"
+    echo "DRY-RUN: No changes were made"
+    echo "========================================"
+    echo ""
+    echo "To actually deploy, run without --dry-run flag"
+    exit 0
+fi
 
 # Export FORCE_DEPLOY for deployment modules
 export FORCE_DEPLOY
