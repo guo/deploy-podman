@@ -64,9 +64,9 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 if [ "$AUTO_CONFIRM" = true ]; then
-    "${SCRIPT_DIR}/scripts/prepare-release.sh" -y "$VERSION"
+    "${SCRIPT_DIR}/homebrew/prepare-release.sh" -y "$VERSION"
 else
-    "${SCRIPT_DIR}/scripts/prepare-release.sh" "$VERSION"
+    "${SCRIPT_DIR}/homebrew/prepare-release.sh" "$VERSION"
 fi
 
 if [ $? -ne 0 ]; then
@@ -82,7 +82,7 @@ echo -e "${BOLD}Step 2: Updating Homebrew Tap${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-"${SCRIPT_DIR}/scripts/update-tap.sh"
+"${SCRIPT_DIR}/homebrew/update-tap.sh"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}✗ Tap update failed${NC}"
@@ -110,7 +110,7 @@ echo -e "     ${BLUE}brew update${NC}"
 echo -e "     ${BLUE}brew upgrade shipd${NC}"
 echo ""
 echo "  3. Commit updated formula to main repo (optional):"
-echo -e "     ${BLUE}git add shipd.rb${NC}"
+echo -e "     ${BLUE}git add homebrew/shipd.rb${NC}"
 echo -e "     ${BLUE}git commit -m \"Update formula for v${VERSION}\"${NC}"
 echo -e "     ${BLUE}git push${NC}"
 echo ""

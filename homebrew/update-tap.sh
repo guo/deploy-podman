@@ -27,15 +27,15 @@ if [ ! -d "$TAP_DIR" ]; then
 fi
 
 # Check if formula exists
-if [ ! -f "${SCRIPT_DIR}/shipd.rb" ]; then
-    echo -e "${RED}Error: Formula not found: ${SCRIPT_DIR}/shipd.rb${NC}"
+if [ ! -f "${SCRIPT_DIR}/homebrew/shipd.rb" ]; then
+    echo -e "${RED}Error: Formula not found: ${SCRIPT_DIR}/homebrew/shipd.rb${NC}"
     echo ""
     echo "Run prepare-release.sh first to create/update the formula."
     exit 1
 fi
 
 # Extract version from formula
-VERSION=$(grep "url.*v" "${SCRIPT_DIR}/shipd.rb" | sed -E 's/.*v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+VERSION=$(grep "url.*v" "${SCRIPT_DIR}/homebrew/shipd.rb" | sed -E 's/.*v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
 
 if [ -z "$VERSION" ]; then
     echo -e "${RED}Error: Could not extract version from formula${NC}"
@@ -48,7 +48,7 @@ echo ""
 
 # Copy formula to tap
 echo "[1/3] Copying formula to tap..."
-cp "${SCRIPT_DIR}/shipd.rb" "${TAP_DIR}/Formula/shipd.rb"
+cp "${SCRIPT_DIR}/homebrew/shipd.rb" "${TAP_DIR}/Formula/shipd.rb"
 echo -e "${GREEN}✓ Formula copied${NC}"
 echo ""
 

@@ -12,9 +12,9 @@ echo "=========================================="
 echo ""
 
 # Check if formula exists
-if [ ! -f "${SCRIPT_DIR}/shipd.rb" ]; then
+if [ ! -f "${SCRIPT_DIR}/homebrew/shipd.rb" ]; then
     echo "Error: shipd.rb not found"
-    echo "Create it first following HOMEBREW.md"
+    echo "Create it first following homebrew/HOMEBREW.md"
     exit 1
 fi
 
@@ -32,7 +32,7 @@ if brew list shipd >/dev/null 2>&1; then
 fi
 
 echo "[1/5] Installing from local formula..."
-brew install --build-from-source "${SCRIPT_DIR}/shipd.rb"
+brew install --build-from-source "${SCRIPT_DIR}/homebrew/shipd.rb"
 echo "✓ Installed"
 echo ""
 

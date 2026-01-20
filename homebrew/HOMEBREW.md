@@ -30,7 +30,7 @@ Copy the SHA256 hash - you'll need it for the formula.
 
 ## Step 3: Update the Formula
 
-Edit `shipd.rb`:
+Edit `homebrew/shipd.rb`:
 
 ```ruby
 class Shipd < Formula
@@ -47,7 +47,7 @@ end
 
 ```bash
 # Install from local formula
-brew install --build-from-source ./shipd.rb
+brew install --build-from-source ./homebrew/shipd.rb
 
 # Test it works
 shipd --version
@@ -69,7 +69,7 @@ Create your own tap (GitHub repo) to host the formula:
 # Add formula to repo
 git clone https://github.com/guo/homebrew-tap
 cd homebrew-tap
-cp /path/to/shipd/shipd.rb Formula/shipd.rb
+cp /path/to/shipd/homebrew/shipd.rb Formula/shipd.rb
 git add Formula/shipd.rb
 git commit -m "Add shipd formula"
 git push
@@ -98,7 +98,7 @@ Submit to official Homebrew repository:
    cd homebrew-core
 
    # Create formula
-   cp /path/to/shipd/shipd.rb Formula/shipd.rb
+   cp /path/to/shipd/homebrew/shipd.rb Formula/shipd.rb
 
    # Create PR
    git checkout -b shipd
@@ -165,7 +165,7 @@ Before publishing:
 
 Check audit:
 ```bash
-brew audit --strict --online shipd.rb
+brew audit --strict --online homebrew/shipd.rb
 ```
 
 ### Binary Not Found

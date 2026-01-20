@@ -6,7 +6,7 @@ Quick reference for creating new Shipd releases.
 
 ```bash
 # Complete release workflow (recommended)
-./scripts/release.sh -y 1.1.0
+./homebrew/release.sh -y 1.1.0
 
 # Then add release notes on GitHub
 ```
@@ -18,7 +18,7 @@ Quick reference for creating new Shipd releases.
 One command does everything:
 
 ```bash
-./scripts/release.sh -y <version>
+./homebrew/release.sh -y <version>
 ```
 
 **What it does:**
@@ -38,12 +38,12 @@ If you need more control:
 
 **Step 1: Prepare release**
 ```bash
-./scripts/prepare-release.sh -y 1.1.0
+./homebrew/prepare-release.sh -y 1.1.0
 ```
 
 **Step 2: Update tap**
 ```bash
-./scripts/update-tap.sh
+./homebrew/update-tap.sh
 ```
 
 **Step 3: Add release notes**
@@ -89,11 +89,11 @@ Before pushing to users:
 
 ```bash
 # Test Homebrew formula locally
-./scripts/test-homebrew-formula.sh
+./homebrew/test-homebrew-formula.sh
 
 # Or manual test
 brew uninstall shipd
-brew install --build-from-source ./shipd.rb
+brew install --build-from-source ./homebrew/shipd.rb
 shipd --version
 ```
 
@@ -142,7 +142,7 @@ curl -sL https://github.com/guo/shipd/archive/refs/tags/v1.1.0.tar.gz | shasum -
 # Delete and recreate
 git tag -d v1.1.0
 git push origin :refs/tags/v1.1.0
-./scripts/release.sh -y 1.1.0
+./homebrew/release.sh -y 1.1.0
 ```
 
 ### Tap push fails
