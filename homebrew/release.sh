@@ -37,6 +37,14 @@ echo -e "==========================================${NC}"
 echo ""
 
 if [ -z "$VERSION" ]; then
+    # Show current version from git tags and formula
+    CURRENT_TAG=$(git -C "$SCRIPT_DIR" tag --sort=-version:refname | head -1 | sed 's/^v//')
+    CURRENT_FORMULA=$(grep 'url.*v[0-9]' "${SCRIPT_DIR}/homebrew/shipd.rb" | sed 's/.*v\([0-9.]*\)\.tar\.gz.*/\1/' 2>/dev/null || echo "unknown")
+
+    echo -e "${BOLD}Current Release Version${NC}"
+    echo -e "  Git tag:     ${BLUE}v${CURRENT_TAG}${NC}"
+    echo -e "  Formula:     ${BLUE}v${CURRENT_FORMULA}${NC}"
+    echo ""
     echo "Usage: $0 [OPTIONS] <version>"
     echo ""
     echo "Options:"
