@@ -185,7 +185,7 @@ if [ -f "${TARGET_DIR}/.config" ]; then
 else
     echo "Error: Target config not found: ${TARGET_DIR}/.config"
     echo ""
-    echo "Create it with: cp .config.example targets/${TARGET}/.config"
+    echo "Create it with: cp targets/example/.config targets/${TARGET}/.config"
     exit 1
 fi
 

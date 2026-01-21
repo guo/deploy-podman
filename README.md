@@ -308,18 +308,18 @@ Best for keeping targets with your project code:
 
 ```bash
 # 1. (Optional) Create global defaults
-cp .config.example .config
+cp targets/example/.config .config
 vi .config
 
 # 2. Create target directory
 mkdir -p targets/myapp-prod
 
 # 3. Create target configuration
-cp .config.example targets/myapp-prod/.config
+cp targets/example/.config targets/myapp-prod/.config
 vi targets/myapp-prod/.config
 
 # 4. Create environment file
-cp env.example targets/myapp-prod/.env
+cp targets/example/.env targets/myapp-prod/.env
 vi targets/myapp-prod/.env
 
 # 5. (Optional) Add additional config files
@@ -336,18 +336,18 @@ Best for global shared targets after installing `shipd`:
 
 # 2. (Optional) Create global defaults
 mkdir -p ~/.shipd
-cp .config.example ~/.shipd/.config
+cp targets/example/.config ~/.shipd/.config
 vi ~/.shipd/.config
 
 # 3. Create target directory
 mkdir -p ~/.shipd/targets/myapp-prod
 
 # 4. Create target configuration
-cp .config.example ~/.shipd/targets/myapp-prod/.config
+cp targets/example/.config ~/.shipd/targets/myapp-prod/.config
 vi ~/.shipd/targets/myapp-prod/.config
 
 # 5. Create environment file
-cp env.example ~/.shipd/targets/myapp-prod/.env
+cp targets/example/.env ~/.shipd/targets/myapp-prod/.env
 vi ~/.shipd/targets/myapp-prod/.env
 
 # 6. Deploy from anywhere
@@ -367,8 +367,11 @@ Each target is a directory under `targets/` with its own configuration:
 ```
 shipd/
 ├── .config                      # Optional: global defaults
-├── .config.example              # Template for configuration
 ├── targets/
+│   ├── example/                 # Example target (template)
+│   │   ├── .config              # Example configuration
+│   │   ├── .env                 # Example environment
+│   │   └── compose.yml          # Example compose file
 │   ├── myapp-prod/
 │   │   ├── .config             # Required: deployment configuration
 │   │   ├── .env                # Required: environment variables
@@ -548,14 +551,14 @@ This deployment method uses **Docker + Docker Compose v2**:
 ```bash
 # Create target with compose file
 mkdir -p targets/myapp-prod
-cp compose.example.yml targets/myapp-prod/compose.yml
+cp targets/example/compose.yml targets/myapp-prod/compose.yml
 vi targets/myapp-prod/compose.yml
 
 # Create simplified config (most settings in compose.yml)
 echo 'SSH_HOST="user@server.com"' > targets/myapp-prod/.config
 
 # Create environment file
-cp env.example targets/myapp-prod/.env
+cp targets/example/.env targets/myapp-prod/.env
 vi targets/myapp-prod/.env
 ```
 
@@ -580,7 +583,7 @@ shipd deploy-multi --all
 - ⚠️ Zero-downtime deployment (`shipd deploy` with `USE_CADDY="true"`) does not support compose targets yet
 - Use `shipd deploy` for compose deployments (brief downtime during update)
 
-See [compose.example.yml](compose.example.yml) for a complete example and [CLAUDE.md](CLAUDE.md#compose-deployments-multi-container) for detailed documentation.
+See [targets/example/compose.yml](targets/example/compose.yml) for a complete example and [CLAUDE.md](CLAUDE.md#compose-deployments-multi-container) for detailed documentation.
 
 ## Deploy to Multiple Targets
 

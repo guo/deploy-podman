@@ -411,8 +411,8 @@ ls -la ~/.shipd/targets/myapp-prod
 
 # Create target if missing
 mkdir -p targets/myapp-prod
-cp .config.example targets/myapp-prod/.config
-cp env.example targets/myapp-prod/.env
+cp targets/example/.config targets/myapp-prod/.config
+cp targets/example/.env targets/myapp-prod/.env
 ```
 
 ### Required variables missing

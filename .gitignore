@@ -4,8 +4,13 @@
 targets.config
 .config
 
+# Allow example files
+!targets/example/.config
+!targets/example/.env
+
 # Container directories (contain sensitive config files)
-targets/
+targets/*
+!targets/example/
 
 # Homebrew formula (maintained in homebrew-tap only)
 shipd.rb

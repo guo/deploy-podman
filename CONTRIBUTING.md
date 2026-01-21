@@ -31,8 +31,8 @@ cd shipd
 
 # Create a test target
 mkdir -p targets/test-app
-cp .config.example targets/test-app/.config
-cp env.example targets/test-app/.env
+cp targets/example/.config targets/test-app/.config
+cp targets/example/.env targets/test-app/.env
 # Edit the .config and .env files for your test environment
 
 # Test deployment
