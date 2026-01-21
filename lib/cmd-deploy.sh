@@ -14,12 +14,14 @@ else
     LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# Find targets directory (search current dir, then home dir)
-find_targets_dir() {
-    if [ -d "./targets" ]; then
-        echo "$(pwd)/targets"
-    elif [ -d "$HOME/.shipd/targets" ]; then
-        echo "$HOME/.shipd/targets"
+# Find a specific target directory (search current dir first, then home dir)
+# Returns the full path to the target directory if found
+find_target_dir() {
+    local target="$1"
+    if [ -d "./targets/${target}" ]; then
+        echo "$(pwd)/targets/${target}"
+    elif [ -d "$HOME/.shipd/targets/${target}" ]; then
+        echo "$HOME/.shipd/targets/${target}"
     else
         echo ""
     fi
@@ -36,14 +38,21 @@ find_global_config() {
     fi
 }
 
-# Function to list available targets
+# Function to list available targets from both locations
 list_targets() {
-    local TARGETS_DIR=$(find_targets_dir)
-    echo "Available targets:"
-    if [ -n "$TARGETS_DIR" ] && [ -d "$TARGETS_DIR" ]; then
-        for dir in "$TARGETS_DIR"/*/ ; do
+    local found_any=false
+
+    # List targets from ./targets/
+    if [ -d "./targets" ]; then
+        local has_local=false
+        for dir in ./targets/*/ ; do
             if [ -d "$dir" ]; then
                 target_name=$(basename "$dir")
+                if [ "$has_local" = false ]; then
+                    echo "Local targets (./targets/):"
+                    has_local=true
+                    found_any=true
+                fi
                 # Detect deployment mode
                 if [ -f "$dir/docker-compose.yml" ] || [ -f "$dir/compose.yml" ]; then
                     echo "  - $target_name (compose → docker)"
@@ -58,11 +67,42 @@ list_targets() {
                 fi
             fi
         done
-    else
-        echo "  (no targets found)"
-        echo "  Searched:"
-        echo "    - ./targets/"
-        echo "    - ~/.shipd/targets/"
+    fi
+
+    # List targets from ~/.shipd/targets/
+    if [ -d "$HOME/.shipd/targets" ]; then
+        local has_home=false
+        for dir in "$HOME/.shipd/targets"/*/ ; do
+            if [ -d "$dir" ]; then
+                target_name=$(basename "$dir")
+                if [ "$has_home" = false ]; then
+                    if [ "$found_any" = true ]; then
+                        echo ""
+                    fi
+                    echo "Home targets (~/.shipd/targets/):"
+                    has_home=true
+                    found_any=true
+                fi
+                # Detect deployment mode
+                if [ -f "$dir/docker-compose.yml" ] || [ -f "$dir/compose.yml" ]; then
+                    echo "  - $target_name (compose → docker)"
+                else
+                    # Check ENGINE setting
+                    engine="podman"
+                    if [ -f "$dir/.config" ]; then
+                        source "$dir/.config"
+                        engine="${ENGINE:-podman}"
+                    fi
+                    echo "  - $target_name (single → $engine)"
+                fi
+            fi
+        done
+    fi
+
+    if [ "$found_any" = false ]; then
+        echo "No targets found in:"
+        echo "  - ./targets/"
+        echo "  - ~/.shipd/targets/"
     fi
 }
 
@@ -130,9 +170,10 @@ set -- "${POSITIONAL_ARGS[@]}"
 
 # Check required arguments
 if [[ -z "$1" ]]; then
-    echo "Error: Missing required argument <target>"
-    echo ""
     echo "Usage: shipd deploy [OPTIONS] <target> [image-tag]"
+    echo ""
+    list_targets
+    echo ""
     echo "Try 'shipd deploy --help' for more information."
     exit 1
 fi
@@ -140,34 +181,21 @@ fi
 TARGET="$1"
 IMAGE_TAG="${2:-latest}"
 
-# Find targets directory and locate target
-TARGETS_DIR=$(find_targets_dir)
-if [ -z "$TARGETS_DIR" ]; then
-    echo "Error: No targets directory found"
+# Find target directory (searches both ./targets/ and ~/.shipd/targets/)
+TARGET_DIR=$(find_target_dir "$TARGET")
+
+# Verify target directory exists
+if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Target '${TARGET}' not found"
     echo ""
     echo "Searched locations:"
-    echo "  - ./targets/"
-    echo "  - ~/.shipd/targets/"
+    echo "  - ./targets/${TARGET}"
+    echo "  - ~/.shipd/targets/${TARGET}"
     echo ""
-    echo "Create one with:"
+    echo "Create it with:"
     echo "  mkdir -p ./targets/${TARGET}"
     echo "  or"
     echo "  mkdir -p ~/.shipd/targets/${TARGET}"
-    exit 1
-fi
-
-TARGET_DIR="${TARGETS_DIR}/${TARGET}"
-
-# Verify target directory exists
-if [ ! -d "$TARGET_DIR" ]; then
-    echo "Error: Target directory not found: ${TARGET_DIR}"
-    echo ""
-    echo "Create it with:"
-    if [ "$TARGETS_DIR" = "$(pwd)/targets" ]; then
-        echo "  mkdir -p ./targets/${TARGET}"
-    else
-        echo "  mkdir -p ~/.shipd/targets/${TARGET}"
-    fi
     echo ""
     list_targets
     exit 1

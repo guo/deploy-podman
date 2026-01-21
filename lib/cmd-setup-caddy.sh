@@ -14,12 +14,13 @@ else
     LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# Find targets directory (search current dir, then home dir)
-find_targets_dir() {
-    if [ -d "./targets" ]; then
-        echo "$(pwd)/targets"
-    elif [ -d "$HOME/.shipd/targets" ]; then
-        echo "$HOME/.shipd/targets"
+# Find a specific target directory (search current dir first, then home dir)
+find_target_dir() {
+    local target="$1"
+    if [ -d "./targets/${target}" ]; then
+        echo "$(pwd)/targets/${target}"
+    elif [ -d "$HOME/.shipd/targets/${target}" ]; then
+        echo "$HOME/.shipd/targets/${target}"
     else
         echo ""
     fi
@@ -52,34 +53,21 @@ fi
 
 TARGET="$1"
 
-# Find targets directory and locate target
-TARGETS_DIR=$(find_targets_dir)
-if [ -z "$TARGETS_DIR" ]; then
-    echo "Error: No targets directory found"
+# Find target directory (searches both ./targets/ and ~/.shipd/targets/)
+TARGET_DIR=$(find_target_dir "$TARGET")
+
+# Verify target directory exists
+if [ -z "$TARGET_DIR" ] || [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: Target '${TARGET}' not found"
     echo ""
     echo "Searched locations:"
-    echo "  - ./targets/"
-    echo "  - ~/.shipd/targets/"
+    echo "  - ./targets/${TARGET}"
+    echo "  - ~/.shipd/targets/${TARGET}"
     echo ""
-    echo "Create one with:"
+    echo "Create it with:"
     echo "  mkdir -p ./targets/${TARGET}"
     echo "  or"
     echo "  mkdir -p ~/.shipd/targets/${TARGET}"
-    exit 1
-fi
-
-TARGET_DIR="${TARGETS_DIR}/${TARGET}"
-
-# Verify target directory exists
-if [ ! -d "$TARGET_DIR" ]; then
-    echo "Error: Target directory not found: ${TARGET_DIR}"
-    echo ""
-    echo "Create it with:"
-    if [ "$TARGETS_DIR" = "$(pwd)/targets" ]; then
-        echo "  mkdir -p ./targets/${TARGET}"
-    else
-        echo "  mkdir -p ~/.shipd/targets/${TARGET}"
-    fi
     exit 1
 fi
 

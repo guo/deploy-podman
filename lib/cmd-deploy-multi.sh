@@ -30,21 +30,9 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
-# Find targets directory (search current dir, then home dir)
-find_targets_dir() {
-    if [ -d "./targets" ]; then
-        echo "$(pwd)/targets"
-    elif [ -d "$HOME/.shipd/targets" ]; then
-        echo "$HOME/.shipd/targets"
-    else
-        echo ""
-    fi
-}
-
-# Check if targets directory exists
-TARGETS_DIR=$(find_targets_dir)
-if [ -z "$TARGETS_DIR" ]; then
-    print_error "targets/ directory not found"
+# Check if any targets directory exists
+if [ ! -d "./targets" ] && [ ! -d "$HOME/.shipd/targets" ]; then
+    print_error "No targets directory found"
     echo ""
     echo "Searched locations:"
     echo "  - ./targets/"
@@ -58,13 +46,79 @@ if [ -z "$TARGETS_DIR" ]; then
     exit 1
 fi
 
-# Function to get all targets from targets directory
+# Function to get all targets from both directories
 get_targets() {
-    for dir in "$TARGETS_DIR"/*/ ; do
-        if [ -d "$dir" ]; then
-            basename "$dir"
-        fi
-    done
+    local targets=()
+
+    # Get targets from ./targets/
+    if [ -d "./targets" ]; then
+        for dir in ./targets/*/ ; do
+            if [ -d "$dir" ]; then
+                local name=$(basename "$dir")
+                targets+=("$name")
+            fi
+        done
+    fi
+
+    # Get targets from ~/.shipd/targets/
+    if [ -d "$HOME/.shipd/targets" ]; then
+        for dir in "$HOME/.shipd/targets"/*/ ; do
+            if [ -d "$dir" ]; then
+                local name=$(basename "$dir")
+                # Avoid duplicates (local takes precedence)
+                local duplicate=false
+                for t in "${targets[@]}"; do
+                    if [ "$t" = "$name" ]; then
+                        duplicate=true
+                        break
+                    fi
+                done
+                if [ "$duplicate" = false ]; then
+                    targets+=("$name")
+                fi
+            fi
+        done
+    fi
+
+    # Print unique targets
+    printf '%s\n' "${targets[@]}"
+}
+
+# Function to list targets with location info
+list_targets_with_location() {
+    # List targets from ./targets/
+    if [ -d "./targets" ]; then
+        local has_local=false
+        for dir in ./targets/*/ ; do
+            if [ -d "$dir" ]; then
+                local name=$(basename "$dir")
+                if [ "$name" = "example" ]; then
+                    continue
+                fi
+                if [ "$has_local" = false ]; then
+                    echo "Local targets (./targets/):"
+                    has_local=true
+                fi
+                echo "  - $name"
+            fi
+        done
+    fi
+
+    # List targets from ~/.shipd/targets/
+    if [ -d "$HOME/.shipd/targets" ]; then
+        local has_home=false
+        for dir in "$HOME/.shipd/targets"/*/ ; do
+            if [ -d "$dir" ]; then
+                local name=$(basename "$dir")
+                if [ "$has_home" = false ]; then
+                    echo ""
+                    echo "Home targets (~/.shipd/targets/):"
+                    has_home=true
+                fi
+                echo "  - $name"
+            fi
+        done
+    fi
 }
 
 # Function to show usage
@@ -86,7 +140,7 @@ show_usage() {
     echo "  shipd deploy-multi -p staging production     # Deploy to staging and production in parallel"
     echo ""
     echo "Available targets:"
-    get_targets | sed 's/^/  - /'
+    list_targets_with_location
 }
 
 # Parse arguments
