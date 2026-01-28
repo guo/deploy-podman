@@ -56,24 +56,28 @@ if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 fi
 
 TARGET="$1"
-TARGETS_DIR=$(find_targets_dir)
 
-if [ -z "$TARGETS_DIR" ]; then
-    echo "Error: Targets directory not found"
-    echo "  Searched: ./targets/ and ~/.shipd/targets/"
-    exit 1
-fi
-
-TARGET_DIR="${TARGETS_DIR}/${TARGET}"
+# Find target directory (search both locations)
+TARGET_DIR=""
+for search_dir in "./targets" "$HOME/.shipd/targets"; do
+    if [ -d "${search_dir}/${TARGET}" ]; then
+        TARGET_DIR="${search_dir}/${TARGET}"
+        break
+    fi
+done
 
 # Verify target directory exists
-if [ ! -d "$TARGET_DIR" ]; then
+if [ -z "$TARGET_DIR" ]; then
     echo "Error: Target not found: ${TARGET}"
     echo ""
     echo "Available targets:"
-    for dir in "$TARGETS_DIR"/*/ ; do
-        if [ -d "$dir" ]; then
-            echo "  - $(basename "$dir")"
+    for search_dir in "./targets" "$HOME/.shipd/targets"; do
+        if [ -d "$search_dir" ]; then
+            for dir in "$search_dir"/*/ ; do
+                if [ -d "$dir" ]; then
+                    echo "  - $(basename "$dir")"
+                fi
+            done
         fi
     done
     exit 1

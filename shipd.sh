@@ -49,9 +49,11 @@ show_help() {
     echo -e "${BOLD}COMMANDS:${NC}"
     echo -e "    ${CYAN}deploy${NC}         Deploy a single target"
     echo -e "    ${CYAN}deploy-multi${NC}   Deploy to multiple targets"
+    echo -e "    ${CYAN}logs${NC}           Show container logs in follow mode"
+    echo -e "    ${CYAN}restart${NC}        Restart a container"
+    echo -e "    ${CYAN}inspect${NC}        Inspect a deployed container's runtime info"
     echo -e "    ${CYAN}setup-caddy${NC}    Setup Caddy reverse proxy for a target"
     echo -e "    ${CYAN}setup-rsync${NC}    Install rsync on remote server"
-    echo -e "    ${CYAN}inspect${NC}        Inspect a deployed container's runtime info"
     echo ""
     echo -e "${BOLD}OPTIONS:${NC}"
     echo "    -h, --help     Show help for a command"
@@ -82,12 +84,20 @@ show_help() {
     echo "    # Inspect a deployed container"
     echo "    shipd inspect depinscan"
     echo ""
+    echo "    # Follow container logs"
+    echo "    shipd logs myapp-prod"
+    echo ""
+    echo "    # Restart a container"
+    echo "    shipd restart myapp-prod"
+    echo ""
     echo -e "${BOLD}GET HELP:${NC}"
     echo "    shipd deploy --help"
     echo "    shipd deploy-multi --help"
+    echo "    shipd logs --help"
+    echo "    shipd restart --help"
+    echo "    shipd inspect --help"
     echo "    shipd setup-caddy --help"
     echo "    shipd setup-rsync --help"
-    echo "    shipd inspect --help"
     echo ""
     echo -e "${BOLD}MORE INFO:${NC}"
     echo "    Documentation: https://github.com/guo/shipd"
@@ -121,6 +131,14 @@ case "${1:-}" in
     inspect)
         shift
         exec "${LIB_DIR}/cmd-inspect.sh" "$@"
+        ;;
+    logs)
+        shift
+        exec "${LIB_DIR}/cmd-logs.sh" "$@"
+        ;;
+    restart)
+        shift
+        exec "${LIB_DIR}/cmd-restart.sh" "$@"
         ;;
     -v|--version|version)
         show_version
