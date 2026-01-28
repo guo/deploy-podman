@@ -22,7 +22,7 @@ else
 fi
 
 # Version
-VERSION="1.0.8"
+VERSION="1.0.9"
 
 # Colors for output
 RED='\033[0;31m'
