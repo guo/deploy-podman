@@ -49,6 +49,7 @@ show_help() {
     echo -e "${BOLD}COMMANDS:${NC}"
     echo -e "    ${CYAN}deploy${NC}         Deploy a single target"
     echo -e "    ${CYAN}deploy-multi${NC}   Deploy to multiple targets"
+    echo -e "    ${CYAN}stop${NC}           Stop a deployed target"
     echo -e "    ${CYAN}logs${NC}           Show container logs in follow mode"
     echo -e "    ${CYAN}restart${NC}        Restart a container"
     echo -e "    ${CYAN}inspect${NC}        Inspect a deployed container's runtime info"
@@ -75,6 +76,12 @@ show_help() {
     echo "    # Deploy to all targets in parallel"
     echo "    shipd deploy-multi --all --parallel"
     echo ""
+    echo "    # Stop a deployed target"
+    echo "    shipd stop myapp-prod"
+    echo ""
+    echo "    # Stop and remove a target"
+    echo "    shipd stop myapp-prod --remove"
+    echo ""
     echo "    # Setup Caddy for zero-downtime deployments"
     echo "    shipd setup-caddy myapp-prod"
     echo ""
@@ -93,6 +100,7 @@ show_help() {
     echo -e "${BOLD}GET HELP:${NC}"
     echo "    shipd deploy --help"
     echo "    shipd deploy-multi --help"
+    echo "    shipd stop --help"
     echo "    shipd logs --help"
     echo "    shipd restart --help"
     echo "    shipd inspect --help"
@@ -119,6 +127,10 @@ case "${1:-}" in
     deploy-multi)
         shift
         exec "${LIB_DIR}/cmd-deploy-multi.sh" "$@"
+        ;;
+    stop)
+        shift
+        exec "${LIB_DIR}/cmd-stop.sh" "$@"
         ;;
     setup-caddy)
         shift

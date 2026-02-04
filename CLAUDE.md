@@ -83,6 +83,12 @@ The deployment system uses a simple directory-based structure:
   - Supports sequential or parallel deployment modes
   - Tracks success/failure per target
 
+- **lib/cmd-stop.sh** - Stop deployed containers command
+  - Stops running containers on remote servers
+  - Supports both single-container and multi-container (compose) deployments
+  - Optional container removal after stop
+  - Auto-detects deployment mode and engine
+
 - **lib/cmd-setup-caddy.sh** - Caddy reverse proxy setup command
   - One-time setup per target
   - Creates Caddy container and configuration
@@ -340,16 +346,46 @@ HEALTH_CHECK_PATH="/"      # Health endpoint
 HEALTH_CHECK_TIMEOUT="30"  # Timeout in seconds
 ```
 
-### Remote Container Management
+### Container Management
+
+#### Stop Containers
+```bash
+# Stop a deployed container (keeps container for restart)
+shipd stop myapp-prod
+
+# Stop with auto-confirm
+shipd stop myapp-prod -y
+
+# Stop and remove container
+shipd stop myapp-prod --remove
+
+# Stop and remove with auto-confirm
+shipd stop myapp-prod -y -r
+
+# Works with both single-container and compose deployments
+shipd stop myapp-compose     # Stops entire compose stack
+```
+
+**Notes:**
+- Default behavior stops the container but keeps it (can be restarted)
+- Use `--remove` flag to delete the container after stopping
+- For compose deployments, stops all services in the stack
+- Single-container targets are stopped but not removed by default
+
+#### Remote Container Management (Advanced)
 ```bash
 # View logs
 ssh <SSH_HOST> 'podman logs -f <CONTAINER_NAME>'
 
-# Restart container
+# Restart stopped container (not removed)
+ssh <SSH_HOST> 'podman start <CONTAINER_NAME>'
+
+# Restart running container
 ssh <SSH_HOST> 'podman restart <CONTAINER_NAME>'
 
-# Stop container
-ssh <SSH_HOST> 'podman stop <CONTAINER_NAME>'
+# For compose deployments
+ssh <SSH_HOST> 'cd /var/app/<TARGET> && docker compose start'
+ssh <SSH_HOST> 'cd /var/app/<TARGET> && docker compose restart'
 ```
 
 ## Important Implementation Details
